@@ -45,7 +45,27 @@ Följande skisser skapas innan utvecklingen börjar och sparas i `Dokumentation/
 - [ ] Startmeny och lobby
 - [ ] Poängtavla/HUD
 - [ ] Game over-skärm
-- [ ] Flödesschema: meny → anslutning → match → resultat → omstart
+- [x] Flödesschema: meny → anslutning → match → resultat → omstart
+
+### Flödesschema
+
+![Flödesschema för spelets meny-, anslutnings-, match- och resultatflöde](Dokumentation/flödesschema.png)
+
+```mermaid
+flowchart TD
+    A[Startmeny] --> B[Anslutning / lobby]
+    B --> C{Anslutning lyckades?}
+    C -- Nej --> B
+    C -- Ja --> D[Starta match]
+    D --> E[Spela match]
+    E --> F{Vinstvillkor uppfyllt?}
+    F -- Nej --> E
+    F -- Ja --> G[Resultat / game over]
+    G --> H{Spela igen?}
+    H -- Ja --> I[Återställ poäng, boll, racketar och matchstatus]
+    I --> D
+    H -- Nej --> A
+```
 
 **Länkar till bilder:** Fylls i när skisserna är fotograferade och inlagda.
 
