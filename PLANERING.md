@@ -4,12 +4,12 @@
 
 ## 1. Gruppen
 
-| Namn | Klass | Huvudansvar |
-| --- | --- | --- |
-| Isak | 240s | XR, handkontroller och nätverk |
-| Gustav | 240s | Spelmekanik och fysik |
-| Lulia | 240s | 3D-miljö, UI och grafik |
-| Robin | 240s | Poäng, ljud, testning och bygge |
+| Namn   | Klass | Huvudansvar           |
+| ------ | ----- | --------------------- |
+| Isak   | 240s  | UI Design             |
+| Gustav | 240s  | Nätverk & Multiplayer |
+| Lulia  | 240s  | Spellogik             |
+| Robin  | 240s  | Miljö                 |
 
 **Projektnamn:** Table Tennis VR<br>
 **Sport:** Bordtennis<br>
@@ -57,13 +57,13 @@ Spelaren använder handkontrollerna för att greppa och släppa racketen med `XR
 
 **Vilka fysikobjekt finns och hur beter de sig?**
 
-| Objekt | Rigidbody? | Collider | Beteende |
-| --- | --- | --- | --- |
-| Bord | Nej | Box Collider | Statisk spelplan i korrekt skala |
-| Nät | Nej | Box Collider | Hindrar bollen från att passera under nätet |
-| Racket | Ja | Box Collider | Greppas och följer handen |
-| Boll | Ja | Sphere Collider | Påverkas av gravitation och racketträff |
-| Spelarzoner | Nej | Trigger Collider | Kontrollerar vilken sida av bordet bollen landar på |
+| Objekt      | Rigidbody? | Collider         | Beteende                                            |
+| ----------- | ---------- | ---------------- | --------------------------------------------------- |
+| Bord        | Nej        | Box Collider     | Statisk spelplan i korrekt skala                    |
+| Nät         | Nej        | Box Collider     | Hindrar bollen från att passera under nätet         |
+| Racket      | Ja         | Box Collider     | Greppas och följer handen                           |
+| Boll        | Ja         | Sphere Collider  | Påverkas av gravitation och racketträff             |
+| Spelarzoner | Nej        | Trigger Collider | Kontrollerar vilken sida av bordet bollen landar på |
 
 Bordet byggs i realistisk skala: 2,74 meter långt, 1,525 meter brett och 0,76 meter högt. En Unity-enhet motsvarar en meter. All Rigidbody-rörelse och bollfysik hanteras i `FixedUpdate()`. Träffar registreras med collision detection och rätt taggar, exempelvis `Boll` och `Racket`.
 
@@ -128,17 +128,17 @@ Spelaren trycker på `Spela igen` på game over-skärmen. Poäng, boll, racketar
 
 ## 6. Arbetsfördelning
 
-| Område | Ansvarig | Beskrivning |
-| --- | --- | --- |
-| VR-uppsättning och interaktion | Isak | XR Origin, OpenXR, handkontroller och grepp |
-| Nätverk | Isak | Test av anslutning och synkronisering som extrafunktion |
-| Spelmekanik och fysik | Gustav | Racket, boll, studs, träffvinkel och fysik |
-| Poängsystem och regler | Robin | Poäng, matchregler, vinstvillkor och reset |
-| 3D-modeller och miljö | Lulia | Bord, nät, racket, boll, material och ljussättning |
-| UI och menyer | Lulia | World Space Canvas, startmeny, HUD och game over |
-| Ljud och haptik | Robin | Träffljud, studs, poäng, musik och vibration |
-| Testning och bygge | Robin | Testprotokoll, prestanda, buggar och APK |
-| Dokumentation och skisser | Hela gruppen | Skisser, källor, licenser och slutrapport |
+| Område                         | Ansvarig     | Beskrivning                                             |
+| ------------------------------ | ------------ | ------------------------------------------------------- |
+| VR-uppsättning och interaktion | Isak         | XR Origin, OpenXR, handkontroller och grepp             |
+| Nätverk                        | Isak         | Test av anslutning och synkronisering som extrafunktion |
+| Spelmekanik och fysik          | Gustav       | Racket, boll, studs, träffvinkel och fysik              |
+| Poängsystem och regler         | Robin        | Poäng, matchregler, vinstvillkor och reset              |
+| 3D-modeller och miljö          | Lulia        | Bord, nät, racket, boll, material och ljussättning      |
+| UI och menyer                  | Lulia        | World Space Canvas, startmeny, HUD och game over        |
+| Ljud och haptik                | Robin        | Träffljud, studs, poäng, musik och vibration            |
+| Testning och bygge             | Robin        | Testprotokoll, prestanda, buggar och APK                |
+| Dokumentation och skisser      | Hela gruppen | Skisser, källor, licenser och slutrapport               |
 
 **Hur samarbetar ni i Git?**
 
@@ -148,16 +148,16 @@ Alla kör Git LFS. `.gitignore` och `.gitattributes` läggs till direkt. `Librar
 
 Projektperioden är 2026-08-18 till 2026-09-11 och omfattar cirka 30,25 timmar.
 
-| Period | Mål — vad ska vara klart? | Ansvarig |
-| --- | --- | --- |
-| 18–19 aug | Planering, skisser, Unity 6 LTS, Git LFS och lärargodkännande | Hela gruppen |
-| 20–24 aug | XR Origin, head tracking, handkontroller, bord i korrekt skala och racket-prefab | Isak och Lulia |
-| 25–27 aug | Boll-Rigidbody, colliders, fysik, träffdetektion och poängregler | Gustav och Robin |
-| 28 aug–1 sep | World Space-meny, startknapp, HUD, game over och reset | Lulia och Robin |
-| 2–4 sep | Ljud, haptik, spatialt ljud, baked lighting och miljö | Robin och Lulia |
-| 5–7 sep | Prestanda, komfort, extern användartestning och buggfixar | Hela gruppen |
-| 8–10 sep | Android, IL2CPP, ARM64, ASTC, APK och slutkontroll | Isak och Robin |
-| 11 sep | Mässdemo, dokumentation och redovisning | Hela gruppen |
+| Period       | Mål — vad ska vara klart?                                                        |
+| ------------ | -------------------------------------------------------------------------------- |
+| 18–19 aug    | Planering, skisser, Unity 6 LTS, Git LFS och lärargodkännande                    |
+| 20–24 aug    | XR Origin, head tracking, handkontroller, bord i korrekt skala och racket-prefab |
+| 25–27 aug    | Boll-Rigidbody, colliders, fysik, träffdetektion och poängregler                 |
+| 28 aug–1 sep | World Space-meny, startknapp, HUD, game over och reset                           |
+| 2–4 sep      | Ljud, haptik, spatialt ljud, baked lighting och miljö                            |
+| 5–7 sep      | Prestanda, komfort, extern användartestning och buggfixar                        |
+| 8–10 sep     | Android, IL2CPP, ARM64, ASTC, APK och slutkontroll                               |
+| 11 sep       | Mässdemo, dokumentation och redovisning                                          |
 
 **Deadline för första spelbara version (prototyp):** 24 augusti 2026<br>
 **Deadline för färdigt bygge:** 10 september 2026<br>
@@ -165,28 +165,28 @@ Projektperioden är 2026-08-18 till 2026-09-11 och omfattar cirka 30,25 timmar.
 
 ## 8. Assets
 
-| Asset | Egen eller hämtad? | Källa / licens |
-| --- | --- | --- |
-| Bord och nät | Egenbyggt i Unity | Skapat av gruppen |
-| Racket och boll | Egenbyggt i Unity | Skapat av gruppen |
-| UI | Egenbyggt | Skapat av gruppen |
-| Texturer/material | Egenbyggda eller hämtade | Källa och licens dokumenteras |
-| Ljud | Egeninspelade eller hämtade | Kenney/Freesound eller annan tillåten licens dokumenteras |
+| Asset             | Egen eller hämtad?          | Källa / licens                                            |
+| ----------------- | --------------------------- | --------------------------------------------------------- |
+| Bord och nät      | Egenbyggt i Unity           | Skapat av gruppen                                         |
+| Racket och boll   | Egenbyggt i Unity           | Skapat av gruppen                                         |
+| UI                | Egenbyggt                   | Skapat av gruppen                                         |
+| Texturer/material | Egenbyggda eller hämtade    | Källa och licens dokumenteras                             |
+| Ljud              | Egeninspelade eller hämtade | Kenney/Freesound eller annan tillåten licens dokumenteras |
 
 Ingen färdig spelprojektlösning eller färdig spelkod hämtas från nätet. Speldesign, C#-kod och integration skrivs av gruppen.
 
 ## 9. Risker
 
-| Risk | Plan B |
-| --- | --- |
-| Nätverk mellan två headset tar för lång tid | Leverera en komplett lokal enspelarversion som uppfyller alla obligatoriska krav |
-| Bollfysiken känns fel | Justera Rigidbody, mass, drag, studs och Throw Velocity Scale genom headsettester |
-| Dålig prestanda | Low-poly-modeller, URP, baked lighting, färre ljuskällor och enklare material |
-| VR orsakar obehag | Spelaren står stilla och ingen automatisk kamerarörelse används |
-| UI är svårt att trycka på | Större World Space-knappar och tydligare raycaster |
-| Merge-konflikter i Unity-scener | En scenägare åt gången, prefab-baserat arbete och pull requests |
-| APK-bygget misslyckas | Testa Android-bygge senast vecka 2 och skapa APK-versioner löpande |
-| För få timmar | Prioritera alla punkter under Måste före nätverk och extrafunktioner |
+| Risk                                        | Plan B                                                                            |
+| ------------------------------------------- | --------------------------------------------------------------------------------- |
+| Nätverk mellan två headset tar för lång tid | Leverera en komplett lokal enspelarversion som uppfyller alla obligatoriska krav  |
+| Bollfysiken känns fel                       | Justera Rigidbody, mass, drag, studs och Throw Velocity Scale genom headsettester |
+| Dålig prestanda                             | Low-poly-modeller, URP, baked lighting, färre ljuskällor och enklare material     |
+| VR orsakar obehag                           | Spelaren står stilla och ingen automatisk kamerarörelse används                   |
+| UI är svårt att trycka på                   | Större World Space-knappar och tydligare raycaster                                |
+| Merge-konflikter i Unity-scener             | En scenägare åt gången, prefab-baserat arbete och pull requests                   |
+| APK-bygget misslyckas                       | Testa Android-bygge senast vecka 2 och skapa APK-versioner löpande                |
+| För få timmar                               | Prioritera alla punkter under Måste före nätverk och extrafunktioner              |
 
 ## 10. Testplan
 
@@ -202,8 +202,7 @@ Följande ska testas och dokumenteras före inlämning:
 8. Bildfrekvensen är stabil och ingen påtvingad kamerarörelse finns.
 9. En extern testperson provar spelet och lämnar dokumenterad feedback.
 10. Alla fyra har commits, branches och pull requests i repot.
-11. Alla externa assets har dokumenterad källa och licens.
-12. Android-inställningarna är IL2CPP, ARM64 och ASTC.
+11. Android-inställningarna är IL2CPP, ARM64 och ASTC.
 
 Spelet betraktas som färdigt först när samtliga punkter under **Måste** är testade och markerade.
 
