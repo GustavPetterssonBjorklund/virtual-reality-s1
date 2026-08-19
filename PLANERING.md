@@ -40,11 +40,11 @@ Spelet är helt VR-baserat. AR och mixed reality ingår inte.
 
 Följande skisser skapas innan utvecklingen börjar och sparas i `Dokumentation/`:
 
-- [ ] Översikt av spelplanen med bord, nät, spelare och säkra spelarzoner
-- [ ] Förstapersonsvy från headsetet
-- [ ] Startmeny och lobby
-- [ ] Poängtavla/HUD
-- [ ] Game over-skärm
+- [x] Översikt av spelplanen med bord, nät, spelare och säkra spelarzoner
+- [x] Förstapersonsvy från headsetet
+- [x] Startmeny och lobby
+- [x] Poängtavla/HUD
+- [x] Game over-skärm
 - [x] Flödesschema: meny → anslutning → match → resultat → omstart
 
 ### Flödesschema
