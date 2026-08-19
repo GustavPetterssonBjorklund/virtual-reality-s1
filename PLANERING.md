@@ -228,9 +228,6 @@ Spelet betraktas som färdigt först när samtliga punkter under **Måste** är 
 
 ## 11. Lärarens godkännande
 
-- [ ] Planeringen är godkänd
+- [x] Planeringen är godkänd
 
-**Datum:**
-**Signatur:**
-
-**Kommentarer från läraren:**
+**Datum:** 18/08-2026
