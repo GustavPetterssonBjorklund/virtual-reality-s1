@@ -1,0 +1,5 @@
+/home/gustav/Documents/github/virtual-reality-s1/table-tennis-vr/.utmp/RelWithDebInfo/1z653c20/arm64-v8a/CMakeFiles/edit_cache.dir
+/home/gustav/Documents/github/virtual-reality-s1/table-tennis-vr/.utmp/RelWithDebInfo/1z653c20/arm64-v8a/CMakeFiles/rebuild_cache.dir
+/home/gustav/Documents/github/virtual-reality-s1/table-tennis-vr/.utmp/RelWithDebInfo/1z653c20/arm64-v8a/GameActivity/CMakeFiles/game.dir
+/home/gustav/Documents/github/virtual-reality-s1/table-tennis-vr/.utmp/RelWithDebInfo/1z653c20/arm64-v8a/GameActivity/CMakeFiles/edit_cache.dir
+/home/gustav/Documents/github/virtual-reality-s1/table-tennis-vr/.utmp/RelWithDebInfo/1z653c20/arm64-v8a/GameActivity/CMakeFiles/rebuild_cache.dir
