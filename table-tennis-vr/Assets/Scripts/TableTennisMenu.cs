@@ -23,9 +23,9 @@ public sealed class TableTennisMenu : MonoBehaviour
 
     public void StartOrRestartMatch()
     {
-        if (match != null)
+        if (match != null && match.NetworkObject != null)
         {
-            match.ResetMatch();
+            match.RequestResetMatch();
         }
     }
 
