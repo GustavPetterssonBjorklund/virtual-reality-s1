@@ -49,6 +49,9 @@ namespace Unity.VRTemplate
 
         void Update()
         {
+            if (m_Arrow == null || m_ArrowHeight == null)
+                return;
+
             m_Arrow.localPosition = m_ArrowHeight.Value;
         }
 

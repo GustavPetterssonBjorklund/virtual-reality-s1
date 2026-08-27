@@ -8,6 +8,10 @@
 **/[Bb]uilds/
 **/[Mm]emoryCaptures/
 **/[Rr]ecordings/
+**/.utmp/
+
+# Generated MCP/Unity screenshots
+**/Assets/Screenshots/
 
 # IDE and OS files
 .vs/
@@ -18,6 +22,3 @@ Thumbs.db
 
 # Unity crash reports
 sysinfo.txt
-
-# Build 
-Build/

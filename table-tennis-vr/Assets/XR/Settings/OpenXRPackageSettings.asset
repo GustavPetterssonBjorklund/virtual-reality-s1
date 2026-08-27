@@ -477,7 +477,7 @@ MonoBehaviour:
   forceRemoveInternetPermission: 0
   m_symmetricProjection: 0
   systemSplashScreen: {fileID: 0}
-  enableSystemKeyboard: 0
+  enableSystemKeyboard: 1
   m_optimizeBufferDiscards: 1
   lateLatchingMode: 0
   lateLatchingDebug: 0
@@ -1574,6 +1574,8 @@ MonoBehaviour:
   - {fileID: 2051105749830685677}
   - {fileID: -6054450511309783338}
   - {fileID: 580453046708926777}
+  - {fileID: -2471362674905606801}
+  - {fileID: -1734471456787174204}
   - {fileID: 8980318060753866109}
   - {fileID: -6559185765804338520}
   - {fileID: -4756202077021157709}
@@ -1628,7 +1630,7 @@ MonoBehaviour:
     m_List: 00000000
   m_depthSubmissionMode: 0
   m_spacewarpMotionVectorTextureFormat: 0
-  m_optimizeBufferDiscards: 0
+  m_optimizeBufferDiscards: 1
   m_symmetricProjection: 0
   m_optimizeMultiviewRenderRegions: 0
   m_multiviewRenderRegionsOptimizationMode: 0
