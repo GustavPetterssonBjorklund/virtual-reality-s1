@@ -1,3 +1,4 @@
+using Unity.Netcode;
 using UnityEngine;
 
 public sealed class TableTennisScoreZone : MonoBehaviour
@@ -13,6 +14,11 @@ public sealed class TableTennisScoreZone : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && !NetworkManager.Singleton.IsServer)
+        {
+            return;
+        }
+
         if (other.GetComponentInParent<TableTennisBall>() == null || match == null)
         {
             return;

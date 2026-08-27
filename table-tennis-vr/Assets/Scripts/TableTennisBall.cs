@@ -1,6 +1,7 @@
+using Unity.Netcode;
 using UnityEngine;
 
-public sealed class TableTennisBall : MonoBehaviour
+public sealed class TableTennisBall : NetworkBehaviour
 {
     [SerializeField] private float maxSpeed = 18f;
     [SerializeField] private float racketImpulseScale = 0.15f;
@@ -16,6 +17,11 @@ public sealed class TableTennisBall : MonoBehaviour
 
     private void FixedUpdate()
     {
+        if (IsSpawned && !IsServer)
+        {
+            return;
+        }
+
         if (ballBody.linearVelocity.sqrMagnitude > maxSpeed * maxSpeed)
         {
             ballBody.linearVelocity = ballBody.linearVelocity.normalized * maxSpeed;
@@ -24,6 +30,11 @@ public sealed class TableTennisBall : MonoBehaviour
 
     public void ResetForServe(Vector3 position)
     {
+        if (IsSpawned && !IsServer)
+        {
+            return;
+        }
+
         ballBody.linearVelocity = Vector3.zero;
         ballBody.angularVelocity = Vector3.zero;
         ballBody.position = position;
@@ -32,6 +43,11 @@ public sealed class TableTennisBall : MonoBehaviour
 
     private void OnCollisionEnter(Collision collision)
     {
+        if (IsSpawned && !IsServer)
+        {
+            return;
+        }
+
         bool hitRacket = false;
         Transform current = collision.collider.transform;
         while (current != null)
