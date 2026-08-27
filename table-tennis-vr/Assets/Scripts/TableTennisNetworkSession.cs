@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using TMPro;
 using Unity.Netcode;
 using Unity.Networking.Transport.Relay;
@@ -7,6 +8,7 @@ using Unity.Services.Core;
 using Unity.Services.Relay;
 using Unity.Services.Relay.Models;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UnityTransport = Unity.Netcode.Transports.UTP.UnityTransport;
 
@@ -24,20 +26,27 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
     private Button hostButton;
     private Button joinButton;
     private bool isBusy;
+    private TouchScreenKeyboard questKeyboard;
+    private Coroutine keyboardActivationRoutine;
+    private string lastKeyboardStatus;
+    private int lastKeyboardTextLength = -1;
 
     public bool IsConnected => networkManager != null && networkManager.IsListening;
     public bool IsServer => networkManager != null && networkManager.IsServer;
 
     private void Awake()
     {
+        RuntimeDiagnostics.Log($"Network session Awake. Platform={Application.platform}, isEditor={Application.isEditor}, persistentDataPath={Application.persistentDataPath}");
         EnsureNetworkManager();
         CreateNetworkPanel();
         networkManager.OnClientConnectedCallback += HandleClientConnected;
         networkManager.OnClientDisconnectCallback += HandleClientDisconnected;
+        Application.focusChanged += HandleApplicationFocusChanged;
     }
 
     private void OnDestroy()
     {
+        Application.focusChanged -= HandleApplicationFocusChanged;
         if (networkManager == null)
         {
             return;
@@ -45,6 +54,34 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
 
         networkManager.OnClientConnectedCallback -= HandleClientConnected;
         networkManager.OnClientDisconnectCallback -= HandleClientDisconnected;
+    }
+
+    private void Update()
+    {
+        if (questKeyboard == null || joinCodeInput == null)
+        {
+            return;
+        }
+
+        joinCodeInput.SetTextWithoutNotify((questKeyboard.text ?? string.Empty).ToUpperInvariant());
+        string keyboardStatus = questKeyboard.status.ToString();
+        int keyboardTextLength = questKeyboard.text == null ? 0 : questKeyboard.text.Length;
+        if (keyboardStatus != lastKeyboardStatus || keyboardTextLength != lastKeyboardTextLength)
+        {
+            RuntimeDiagnostics.Log($"Join keyboard update. status={keyboardStatus}, textLength={keyboardTextLength}, inputTextLength={joinCodeInput.text.Length}");
+            lastKeyboardStatus = keyboardStatus;
+            lastKeyboardTextLength = keyboardTextLength;
+        }
+        if (questKeyboard.status != TouchScreenKeyboard.Status.Visible)
+        {
+            RuntimeDiagnostics.Log($"Join keyboard closed. finalStatus={keyboardStatus}, finalTextLength={keyboardTextLength}");
+            questKeyboard = null;
+        }
+    }
+
+    private void HandleApplicationFocusChanged(bool hasFocus)
+    {
+        RuntimeDiagnostics.Log($"Application focus changed. hasFocus={hasFocus}, keyboardExists={questKeyboard != null}, keyboardVisible={TouchScreenKeyboard.visible}");
     }
 
     public async void CreateSession()
@@ -85,6 +122,8 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
 
     public void JoinSessionFromInput()
     {
+        RuntimeDiagnostics.Log($"Join button pressed. inputExists={joinCodeInput != null}, inputTextLength={(joinCodeInput == null ? 0 : joinCodeInput.text.Length)}, selected={IsJoinCodeInputSelected()}");
+        DeactivateJoinCodeInput();
         JoinSession(joinCodeInput == null ? string.Empty : joinCodeInput.text);
     }
 
@@ -112,6 +151,7 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
 
             codeText.text = $"JOINED\n{joinCode.Trim().ToUpperInvariant()}";
             SetStatus("Connected. Waiting for the host to start the match.");
+            DeactivateJoinCodeInput();
         }
         catch (Exception exception)
         {
@@ -207,6 +247,11 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
         Canvas canvas = canvasObject.GetComponent<Canvas>();
         canvas.renderMode = RenderMode.WorldSpace;
         canvas.worldCamera = Camera.main;
+        if (canvas.worldCamera == null)
+        {
+            canvas.worldCamera = FindFirstCamera();
+        }
+        RuntimeDiagnostics.Log($"Network canvas created. worldCamera={(canvas.worldCamera == null ? "null" : canvas.worldCamera.name)}, mainCamera={(Camera.main == null ? "null" : Camera.main.name)}");
         canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(700f, 300f);
         canvasObject.AddComponent<UnityEngine.XR.Interaction.Toolkit.UI.TrackedDeviceGraphicRaycaster>();
 
@@ -259,7 +304,7 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
         return label;
     }
 
-    private static TMP_InputField CreateInputField(Transform parent, Vector2 position)
+    private TMP_InputField CreateInputField(Transform parent, Vector2 position)
     {
         GameObject gameObject = CreateUiObject("Join Code Input", parent);
         SetRect(gameObject, new Vector2(220f, 55f), position, Vector2.one * 0.5f);
@@ -273,11 +318,112 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
         text.color = Color.black;
         text.alignment = TextAlignmentOptions.Center;
 
+        GameObject placeholderObject = CreateUiObject("Placeholder", gameObject.transform);
+        SetRect(placeholderObject, new Vector2(200f, 45f), Vector2.zero, Vector2.one * 0.5f);
+        TextMeshProUGUI placeholder = placeholderObject.AddComponent<TextMeshProUGUI>();
+        placeholder.text = "ENTER CODE";
+        placeholder.fontSize = 20f;
+        placeholder.color = new Color(0.25f, 0.25f, 0.25f, 1f);
+        placeholder.alignment = TextAlignmentOptions.Center;
+
         TMP_InputField input = gameObject.AddComponent<TMP_InputField>();
         input.textComponent = text;
+        input.placeholder = placeholder;
         input.characterLimit = 12;
         input.contentType = TMP_InputField.ContentType.Alphanumeric;
+        input.lineType = TMP_InputField.LineType.SingleLine;
+        input.keyboardType = TouchScreenKeyboardType.ASCIICapable;
+        // This must be false: true explicitly prevents Unity from displaying the software keyboard.
+        input.shouldHideSoftKeyboard = false;
+        input.shouldHideMobileInput = false;
+
+        input.onSelect.AddListener(_ => HandleJoinCodeInputSelected());
         return input;
+    }
+
+    private void HandleJoinCodeInputSelected()
+    {
+        if (joinCodeInput == null)
+        {
+            RuntimeDiagnostics.LogWarning("Join input activation requested, but the input field is null.");
+            return;
+        }
+
+        RuntimeDiagnostics.Log($"Join input selected. active={joinCodeInput.gameObject.activeInHierarchy}, enabled={joinCodeInput.enabled}, interactable={joinCodeInput.interactable}, selected={IsJoinCodeInputSelected()}, eventSystemExists={EventSystem.current != null}, keyboardSupported={TouchScreenKeyboard.isSupported}, shouldHideSoftKeyboard={joinCodeInput.shouldHideSoftKeyboard}, shouldHideMobileInput={joinCodeInput.shouldHideMobileInput}");
+        if (keyboardActivationRoutine != null)
+        {
+            StopCoroutine(keyboardActivationRoutine);
+        }
+
+        keyboardActivationRoutine = StartCoroutine(OpenQuestKeyboard());
+    }
+
+    private IEnumerator OpenQuestKeyboard()
+    {
+        yield return null;
+
+        if (joinCodeInput == null || !TouchScreenKeyboard.isSupported)
+        {
+            RuntimeDiagnostics.LogWarning($"Quest keyboard unavailable. inputExists={joinCodeInput != null}, supported={TouchScreenKeyboard.isSupported}");
+            keyboardActivationRoutine = null;
+            yield break;
+        }
+
+        RuntimeDiagnostics.Log($"Opening Quest keyboard. inputTextLength={joinCodeInput.text.Length}, keyboardType={joinCodeInput.keyboardType}, characterLimit={joinCodeInput.characterLimit}");
+        questKeyboard = TouchScreenKeyboard.Open(
+            joinCodeInput.text,
+            joinCodeInput.keyboardType,
+            false,
+            false,
+            false,
+            false,
+            "Enter join code",
+            joinCodeInput.characterLimit);
+        if (questKeyboard == null)
+        {
+            RuntimeDiagnostics.LogError("TouchScreenKeyboard.Open returned null.");
+        }
+        else
+        {
+            lastKeyboardStatus = questKeyboard.status.ToString();
+            lastKeyboardTextLength = questKeyboard.text == null ? 0 : questKeyboard.text.Length;
+            RuntimeDiagnostics.Log($"Quest keyboard requested. status={lastKeyboardStatus}, active={questKeyboard.active}, visible={TouchScreenKeyboard.visible}, area={TouchScreenKeyboard.area}, applicationFocused={Application.isFocused}, textLength={lastKeyboardTextLength}");
+        }
+        keyboardActivationRoutine = null;
+    }
+
+    private void DeactivateJoinCodeInput()
+    {
+        if (joinCodeInput == null)
+        {
+            return;
+        }
+
+        RuntimeDiagnostics.Log($"Deactivating join input. focused={joinCodeInput.isFocused}, selected={IsJoinCodeInputSelected()}, keyboardExists={questKeyboard != null}");
+        joinCodeInput.DeactivateInputField();
+        questKeyboard = null;
+        lastKeyboardStatus = null;
+        lastKeyboardTextLength = -1;
+        if (keyboardActivationRoutine != null)
+        {
+            StopCoroutine(keyboardActivationRoutine);
+            keyboardActivationRoutine = null;
+        }
+        if (EventSystem.current != null && EventSystem.current.currentSelectedGameObject == joinCodeInput.gameObject)
+        {
+            EventSystem.current.SetSelectedGameObject(null);
+        }
+    }
+
+    private static Camera FindFirstCamera()
+    {
+        Camera[] cameras = Camera.allCameras;
+        return cameras.Length == 0 ? null : cameras[0];
+    }
+
+    private bool IsJoinCodeInputSelected()
+    {
+        return joinCodeInput != null && EventSystem.current != null && EventSystem.current.currentSelectedGameObject == joinCodeInput.gameObject;
     }
 
     private static Button CreateButton(Transform parent, string label, Vector2 position, UnityEngine.Events.UnityAction action)
