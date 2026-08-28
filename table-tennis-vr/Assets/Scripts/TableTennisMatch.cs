@@ -16,6 +16,8 @@ public sealed class TableTennisMatch : NetworkBehaviour
     public int PlayerTwoScore => IsOffline ? offlinePlayerTwoScore : playerTwoScore.Value;
     public bool IsGameOver => IsOffline ? offlineIsGameOver : isGameOver.Value;
     public int Winner => IsOffline ? offlineWinner : winner.Value;
+    public int PointsToWin => pointsToWin;
+    public int RequiredLead => requiredLead;
 
     private TableTennisBall ball;
     private Vector3 servePosition;
@@ -97,6 +99,25 @@ public sealed class TableTennisMatch : NetworkBehaviour
         }
 
         RequestResetMatchServerRpc();
+    }
+
+    public void DebugAwardPoint(int player)
+    {
+        if (!IsOffline)
+        {
+            return;
+        }
+
+        AwardPoint(player);
+    }
+
+    public void DebugResetBall()
+    {
+        if (IsOffline)
+        {
+            CancelInvoke(nameof(ResetBall));
+            ResetBall();
+        }
     }
 
     [Rpc(SendTo.Server)]
