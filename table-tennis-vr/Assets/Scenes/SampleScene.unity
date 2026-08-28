@@ -11046,6 +11046,7 @@ GameObject:
   - component: {fileID: 1328640064}
   - component: {fileID: 1328640065}
   - component: {fileID: 1328640066}
+  - component: {fileID: 1328640067}
   m_Layer: 0
   m_Name: Table Tennis Table
   m_TagString: Untagged
@@ -11159,6 +11160,18 @@ MonoBehaviour:
   racketPrefab: {fileID: 5617678960556187694, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
   maxConnections: 1
   connectionType: dtls
+--- !u!114 &1328640067
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1328640060}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a7162a313f12587ca9cdc9a99eb6c66b, type: 3}
+  m_Name: ''
+  m_EditorClassIdentifier: Assembly-CSharp::TableTennisDebugPanel
 --- !u!1 &1351058435
 GameObject:
   m_ObjectHideFlags: 0

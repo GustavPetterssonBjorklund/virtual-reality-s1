@@ -7,6 +7,10 @@ public sealed class TableTennisBall : NetworkBehaviour
     [SerializeField] private float racketImpulseScale = 0.15f;
 
     private Rigidbody ballBody;
+    private bool frozen;
+
+    public Vector3 LinearVelocity => ballBody == null ? Vector3.zero : ballBody.linearVelocity;
+    public bool IsFrozen => frozen;
 
     private void Awake()
     {
@@ -19,6 +23,13 @@ public sealed class TableTennisBall : NetworkBehaviour
     {
         if (IsSpawned && !IsServer)
         {
+            return;
+        }
+
+        if (frozen)
+        {
+            ballBody.linearVelocity = Vector3.zero;
+            ballBody.angularVelocity = Vector3.zero;
             return;
         }
 
@@ -35,15 +46,47 @@ public sealed class TableTennisBall : NetworkBehaviour
             return;
         }
 
+        frozen = false;
         ballBody.linearVelocity = Vector3.zero;
         ballBody.angularVelocity = Vector3.zero;
         ballBody.position = position;
         ballBody.rotation = Quaternion.identity;
     }
 
+    public void DebugLaunch(Vector3 velocity)
+    {
+        if (IsSpawned)
+        {
+            return;
+        }
+
+        frozen = false;
+        ballBody.linearVelocity = Vector3.ClampMagnitude(velocity, maxSpeed);
+    }
+
+    public void DebugSetFrozen(bool value)
+    {
+        if (IsSpawned)
+        {
+            return;
+        }
+
+        frozen = value;
+        if (frozen)
+        {
+            ballBody.linearVelocity = Vector3.zero;
+            ballBody.angularVelocity = Vector3.zero;
+        }
+    }
+
     private void OnCollisionEnter(Collision collision)
     {
         if (IsSpawned && !IsServer)
+        {
+            return;
+        }
+
+        if (frozen)
         {
             return;
         }
