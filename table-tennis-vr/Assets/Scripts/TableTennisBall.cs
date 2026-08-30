@@ -17,6 +17,32 @@ public sealed class TableTennisBall : NetworkBehaviour
         ballBody = GetComponent<Rigidbody>();
         ballBody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         ballBody.interpolation = RigidbodyInterpolation.Interpolate;
+
+        // Offline play still needs the normal local physics simulation. Once
+        // networking starts, OnNetworkSpawn switches non-authoritative copies
+        // to kinematic so they only display the server's NetworkTransform.
+        ApplyPhysicsAuthority();
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        ApplyPhysicsAuthority();
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        // Restore local physics if this object returns to an offline scene.
+        ApplyPhysicsAuthority();
+    }
+
+    private void ApplyPhysicsAuthority()
+    {
+        if (ballBody == null)
+        {
+            return;
+        }
+
+        ballBody.isKinematic = IsSpawned && !IsServer;
     }
 
     private void FixedUpdate()
