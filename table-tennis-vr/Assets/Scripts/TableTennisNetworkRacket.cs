@@ -11,8 +11,10 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
     {
         grabInteractable = GetComponent<UnityEngine.XR.Interaction.Toolkit.Interactables.XRGrabInteractable>();
         body = GetComponent<Rigidbody>();
-        body.isKinematic = true;
-        body.useGravity = false;
+        body.isKinematic = false;
+        body.useGravity = true;
+        body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+        body.interpolation = RigidbodyInterpolation.Interpolate;
     }
 
     public override void OnNetworkSpawn()
@@ -36,6 +38,7 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
     [ServerRpc(Delivery = RpcDelivery.Unreliable)]
     private void SubmitPoseServerRpc(Vector3 position, Quaternion rotation)
     {
-        transform.SetPositionAndRotation(position, rotation);
+        body.MovePosition(position);
+        body.MoveRotation(rotation);
     }
 }
