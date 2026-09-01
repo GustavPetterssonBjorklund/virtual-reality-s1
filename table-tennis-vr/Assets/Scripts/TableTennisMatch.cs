@@ -101,6 +101,27 @@ public sealed class TableTennisMatch : NetworkBehaviour
         RequestResetMatchServerRpc();
     }
 
+    /// <summary>
+    /// Starts a match for debug/testing with only the current player connected.
+    /// This intentionally does not check MR readiness or the connected-player count.
+    /// </summary>
+    public void ForceStartSoloMatch()
+    {
+        if (IsOffline)
+        {
+            ResetOfflineMatch();
+            return;
+        }
+
+        if (IsServer)
+        {
+            ResetMatch();
+            return;
+        }
+
+        ForceStartSoloMatchServerRpc();
+    }
+
     public void DebugAwardPoint(int player)
     {
         if (!IsOffline)
@@ -122,6 +143,12 @@ public sealed class TableTennisMatch : NetworkBehaviour
 
     [Rpc(SendTo.Server)]
     private void RequestResetMatchServerRpc()
+    {
+        ResetMatch();
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    private void ForceStartSoloMatchServerRpc()
     {
         ResetMatch();
     }
