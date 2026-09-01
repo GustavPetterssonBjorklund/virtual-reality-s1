@@ -16,9 +16,9 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <EnableDefaultItems>false</EnableDefaultItems>
     <LangVersion>9.0</LangVersion>
-    <RootNamespace></RootNamespace>
+    <RootNamespace>MCPForUnity.Runtime</RootNamespace>
     <OutputType>Library</OutputType>
-    <AssemblyName>Unity.XR.Hands.Samples.VisualizerSample</AssemblyName>
+    <AssemblyName>MCPForUnity.Runtime</AssemblyName>
     <TargetFramework>netstandard2.1</TargetFramework>
     <BaseDirectory>.</BaseDirectory>
   </PropertyGroup>
@@ -48,13 +48,17 @@
     <Analyzer Include="C:\Unity\Editor\Data\Tools\BuildPipeline\Unity.SourceGenerators\Unity.UIToolkit.SourceGenerator.dll" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Assets\Samples\XR Hands\1.8.1\HandVisualizer\Scripts\MaterialPipelineHandler.cs" />
-    <Compile Include="Assets\Samples\XR Hands\1.8.1\HandVisualizer\Scripts\JointVisualizer.cs" />
-    <Compile Include="Assets\Samples\XR Hands\1.8.1\HandVisualizer\Scripts\HandProcessor.cs" />
-    <Compile Include="Assets\Samples\XR Hands\1.8.1\HandVisualizer\Scripts\HandVisualizer.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Runtime\Helpers\ScreenshotUtility.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Runtime\AssemblyInfo.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Runtime\Helpers\UnityFindObjectsCompat.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Runtime\Helpers\UnityObjectIdCompat.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Runtime\Serialization\UnityTypeConverters.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Runtime\Helpers\UnityCompatShims.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Runtime\Helpers\UnityAssembliesCompat.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Runtime\Helpers\UnityPhysicsCompat.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Assets\Samples\XR Hands\1.8.1\HandVisualizer\Unity.XR.Hands.Samples.VisualizerSample.asmdef" />
+    <None Include="Packages\com.coplaydev.unity-mcp\Runtime\MCPForUnity.Runtime.asmdef" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">
@@ -1107,18 +1111,6 @@
     </Reference>
     <Reference Include="System.Xml.Serialization">
       <HintPath>C:\Unity\Editor\Data\NetStandard\compat\2.1.0\shims\netfx\System.Xml.Serialization.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Unity.InputSystem">
-      <HintPath>Library\ScriptAssemblies\Unity.InputSystem.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Unity.XR.CoreUtils">
-      <HintPath>Library\ScriptAssemblies\Unity.XR.CoreUtils.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Unity.XR.Hands">
-      <HintPath>Library\ScriptAssemblies\Unity.XR.Hands.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">

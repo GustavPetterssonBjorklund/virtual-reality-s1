@@ -16,9 +16,9 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <EnableDefaultItems>false</EnableDefaultItems>
     <LangVersion>9.0</LangVersion>
-    <RootNamespace></RootNamespace>
+    <RootNamespace>MCPForUnity.Editor</RootNamespace>
     <OutputType>Library</OutputType>
-    <AssemblyName>Unity.XR.Interaction.Toolkit.Samples.StarterAssets.Editor</AssemblyName>
+    <AssemblyName>MCPForUnity.Editor</AssemblyName>
     <TargetFramework>netstandard2.1</TargetFramework>
     <BaseDirectory>.</BaseDirectory>
   </PropertyGroup>
@@ -48,10 +48,326 @@
     <Analyzer Include="C:\Unity\Editor\Data\Tools\BuildPipeline\Unity.SourceGenerators\Unity.UIToolkit.SourceGenerator.dll" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Assets\Samples\XR Interaction Toolkit\3.5.1\Starter Assets\Editor\Scripts\StarterAssetsSampleProjectValidation.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\VSCodeConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Dependencies\Models\DependencyStatus.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Vfx\ParticleCommon.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\McpCiBoot.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\Import\ImageImportPipeline.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Constants\HealthStatus.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Graphics\VolumeOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Build\BuildTargetMapping.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\WindsurfConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\McpConfigurationHelper.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Constants\EditorPrefKeys.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Vfx\ParticleWrite.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Resources\McpForUnityResourceAttribute.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\GameObjectLookup.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Security\SecureKeyStore\SecureKeyStoreConstants.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\CodexConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Physics\PhysicsMaterialOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Animation\ControllerBlendTrees.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\ExecPath.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\RiderConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\Import\SafeZipExtractor.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Build\BuildSettingsHelper.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Resources\Editor\GetPrefabStage.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Setup\SetupWindowService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\ServerManagementService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\QwenCodeConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Cameras\CameraControl.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Profiler\Operations\FrameTimingOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Vfx\ManageVFX.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\ManageMaterial.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\CopilotCliConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\CherryStudioConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\EditorPrefs\EditorPrefsWindow.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\Providers\IProviderAdapters.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\Server\IPidFileManager.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\EditorStateCache.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\Server\IProcessTerminator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Physics\PhysicsForceOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\RenderPipelineUtility.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Vfx\ParticleControl.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Dependencies\PlatformDetectors\PlatformDetectorBase.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Dependencies\PlatformDetectors\IPlatformDetector.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Resources\Project\Layers.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\Providers\ProviderHttp.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\ManagePackages.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\IServerManagementService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Resources\Scene\RendererFeaturesResource.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Models\Command.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\GameObjects\GameObjectLookAt.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\IMcpClientConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Graphics\RenderingStatsOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Resources\Editor\ActiveTool.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\ObjectResolver.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Vfx\LineRead.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Resources\Editor\EditorState.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\PortManager.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\ManageComponents.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\IClientConfigurationService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\Transport\TransportCommandDispatcher.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\Transport\Transports\StdioBridgeHost.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Vfx\ParticleRead.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\GameObjects\ManageGameObjectCommon.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\GameObjects\ComponentResolver.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Migrations\StdIoVersionMigration.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Animation\ClipPresets.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\MenuItems\MCPForUnityMenu.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Build\BuildJob.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Models\McpStatus.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\McpClientConfiguratorBase.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Dependencies\UvInstaller.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Models\MCPConfigServer.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\BlenderDetection.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\ClaudeCodeConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\GameObjects\GameObjectCreate.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\OpenCodeConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\Transport\Transports\WebSocketTransportClient.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Graphics\RendererFeatureOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Dependencies\PlatformDetectors\LinuxPlatformDetector.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\ProjectIdentityUtility.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\RunTests.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\EditorWindowScreenshotUtility.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\AssetGen\GenerateModel.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\Components\Tools\McpToolsSection.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\RefreshUnity.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\AssetGenJobManager.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\ProBuilder\ManageProBuilder.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\GameObjects\GameObjectComponentHelpers.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Profiler\Operations\SessionOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\ManageScriptableObject.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\GameObjects\GameObjectHandlers.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\FindGameObjects.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Dependencies\Models\DependencyCheckResult.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\AssetPathUtility.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\AssetGenModelCatalog.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Dependencies\PlatformDetectors\WindowsPlatformDetector.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Security\SecureKeyStore\SecureKeyStore.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Cameras\ManageCamera.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Resources\Scene\GameObjectResource.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\Server\TerminalLauncher.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Models\MCPConfigServers.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Prefabs\ManagePrefabs.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\Components\ClientConfig\McpClientConfigSection.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\IPackageDeploymentService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Vfx\TrailControl.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\TestJobManager.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\AntigravityConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Resources\Project\Tags.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Graphics\ManageGraphics.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\Server\ProcessTerminator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\IPathResolverService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\McpLogRecord.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\Components\Resources\McpResourcesSection.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\PrefabUtilityHelper.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\External\Tommy.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Dependencies\DependencyManager.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Profiler\Operations\MemorySnapshotOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Resources\MenuItems\GetMenuItems.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Resources\Scene\CamerasResource.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Graphics\SkyboxOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\Http\HttpRequestSpec.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\ManageScript.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\VectorParsing.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Setup\RoslynInstaller.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Models\McpConfig.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\ComponentOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Physics\PhysicsRigidbodyOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Resources\Scene\VolumesResource.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\GameObjects\GameObjectDelete.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Profiler\Operations\FrameDebuggerOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\Server\IProcessDetector.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\Server\ITerminalLauncher.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\KiloCodeConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\TextureOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Vfx\VfxGraphControl.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\Providers\TripoAdapter.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\Providers\FalAudioAdapter.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Resources\Project\ProjectInfo.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Graphics\GraphicsHelpers.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\ParamCoercion.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\ToolDiscoveryService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Vfx\VfxGraphRead.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\Transport\IMcpTransportClient.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\HttpBridgeReloadHandler.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\KiroConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Physics\PhysicsSettingsOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\McpEditorShutdownCleanup.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\GameObjects\GameObjectDuplicate.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\PropertyConversion.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Security\SecureKeyStore\EncryptedFileKeyStore.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\Transport\TransportManager.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Animation\ClipCreate.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\MCPForUnityEditorWindow.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\Import\AudioImportPipeline.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Resources\Scene\RenderingStatsResource.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Constants\ProductInfo.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\TelemetryHelper.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\RendererHelpers.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\CursorConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\ManageEditor.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Cameras\CameraConfigure.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\PackageUpdateService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\ConfigJsonBuilder.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Physics\JointOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Animation\AnimatorControl.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\AssetGenPrefs.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\MCPServiceLocator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\Http\FakeHttpTransport.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Security\SecureKeyStore\LinuxSecretToolKeyStore.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\ManageScene.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Graphics\RenderPipelineOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\UnityJsonSerializer.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Vfx\TrailRead.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\ExecuteCode.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Profiler\Operations\CounterOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Cameras\CameraHelpers.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\AntigravityIdeConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\IPackageUpdateService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Constants\AuthConstants.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\ITestRunnerService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\EditorConfigurationCache.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\Pagination.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\BridgeControlService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\StringCaseUtility.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Security\SecureKeyStore\WindowsCredentialKeyStore.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\TraeConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Animation\ManageAnimation.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\Response.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Vfx\VfxGraphAssets.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\Components\Validation\McpValidationSection.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\Components\Branding\OceanMark.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\McpForUnityToolAttribute.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\IBridgeControlService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\PackageJobManager.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Resources\Tests\GetTests.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\StartupConfigRewrite.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\VSCodeInsidersConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\ClineConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\PlatformService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\ManageTexture.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\IToolDiscoveryService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\ReadConsole.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Models\McpClient.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Security\SecureKeyStore\MacKeychainKeyStore.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\Components\AssetGen\McpAssetGenSection.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\ScreenshotPreferences.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\EditorPrefsWindowService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Profiler\Operations\ObjectMemoryOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\CodexConfigHelper.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Migrations\LegacyServerSrcMigration.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\Providers\ProviderModels.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\AssetGen\GenerateAudio.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Setup\SkillSyncService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\BatchExecute.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\HttpAutoStartHandler.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\Transport\TransportState.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\AssetGen\AssetGenToolHelpers.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Resources\Editor\Windows.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\ManageBuild.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Profiler\ManageProfiler.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Cameras\CameraCreate.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\ClientConfigurationService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\Server\ServerCommandBuilder.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\GameObjects\GameObjectModify.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\Http\IHttpTransport.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\ProBuilder\ProBuilderSmoothing.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\McpJobStateStore.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Dependencies\PlatformDetectors\MacOSPlatformDetector.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\Providers\AssetGenProviders.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\MaterialOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Vfx\VfxGraphCommon.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\Components\Advanced\McpAdvancedSection.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Physics\PhysicsQueryOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\IResourceDiscoveryService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\GeminiCliConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\Providers\OpenRouterAdapter.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Vfx\ManageVfxCommon.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Physics\PhysicsSimulationOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Vfx\VfxGraphWrite.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\ResourceDiscoveryService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\MCPSetupWindow.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\KimiCodeConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Build\BuildRunner.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Vfx\LineCreate.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\AssetGen\GenerateImage.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Graphics\LightBakingOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Resources\Editor\ToolStates.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\GameObjects\GameObjectMoveRelative.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Setup\McpForUnitySkillInstaller.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\UnityReflect.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Resources\Editor\Selection.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\Http\UnityWebRequestTransport.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Security\SecureKeyStore\EnvKeyOverride.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\OpenClawConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\Http\HttpResult.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\ManageUI.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\AssetGenPaths.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\McpLog.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\Providers\FalAdapter.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\AssemblyInfo.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\Providers\MeshyAdapter.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\AssetGen\ImportModelFile.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Physics\ManagePhysics.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\ManageShader.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\McpClientRegistry.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\PathResolverService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\TestRunStatus.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Vfx\TrailWrite.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\GameObjectSerializer.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Animation\ControllerCreate.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Animation\AnimatorRead.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\GetTestJob.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\AssetGen\ImportModel.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\UnityTypeResolver.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Physics\PhysicsValidationOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Security\SecureKeyStore\SecretRedactor.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\ToolParams.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\CommandRegistry.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\Components\Connection\McpConnectionSection.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\Server\IServerCommandBuilder.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\Server\ProcessDetector.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\ClaudeDesktopConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Clients\Configurators\CodeBuddyCliConfigurator.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\ExecuteMenuItem.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\Import\ModelImportPipeline.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\ProBuilder\ProBuilderMeshUtils.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\ManageAsset.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\Providers\LocalImage.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\TestRunnerNoThrottle.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Physics\CollisionMatrixOps.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\PackageDeploymentService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\AssetGen\Providers\SketchfabAdapter.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Vfx\LineWrite.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\TestRunnerService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\StdioBridgeReloadHandler.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Helpers\HttpEndpointUtility.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Security\SecureKeyStore\ISecureKeyStore.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\Server\PidFileManager.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\Animation\ControllerLayers.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\IPlatformService.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Services\Transport\Transports\StdioTransportClient.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\JsonUtil.cs" />
+    <Compile Include="Packages\com.coplaydev.unity-mcp\Editor\Tools\GameObjects\ManageGameObject.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Assets\Samples\XR Interaction Toolkit\3.5.1\Starter Assets\Editor\StarterAssets.Editor.asmdef" />
+    <None Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\MCPSetupWindow.uss" />
+    <None Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\Components\Resources\McpResourcesSection.uxml" />
+    <None Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\EditorPrefs\EditorPrefItem.uxml" />
+    <None Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\Components\Advanced\McpAdvancedSection.uxml" />
+    <None Include="Packages\com.coplaydev.unity-mcp\Editor\MCPForUnity.Editor.asmdef" />
+    <None Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\EditorPrefs\EditorPrefsWindow.uss" />
+    <None Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\Components\Connection\McpConnectionSection.uxml" />
+    <None Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\Components\Tools\McpToolsSection.uxml" />
+    <None Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\Components\ClientConfig\McpClientConfigSection.uxml" />
+    <None Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\EditorPrefs\EditorPrefsWindow.uxml" />
+    <None Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\Components\Common.uss" />
+    <None Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\Components\AssetGen\McpAssetGenSection.uxml" />
+    <None Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\Components\Validation\McpValidationSection.uxml" />
+    <None Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\MCPForUnityEditorWindow.uxml" />
+    <None Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\MCPForUnityEditorWindow.uss" />
+    <None Include="Packages\com.coplaydev.unity-mcp\Editor\Windows\MCPSetupWindow.uxml" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">
@@ -606,28 +922,12 @@
       <HintPath>C:\Unity\Editor\Data\PlaybackEngines\WindowsStandaloneSupport\UnityEditor.WindowsStandalone.Extensions.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="websocket-sharp">
-      <HintPath>Library\PackageCache\com.unity.services.wire@aba8a6fb1fe2\Plugins\websocket-sharp.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Unity.Collections.LowLevel.ILSupport">
-      <HintPath>Library\PackageCache\com.unity.collections@84e8eb3fc12e\Unity.Collections.LowLevel.ILSupport\Unity.Collections.LowLevel.ILSupport.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
     <Reference Include="nunit.framework">
       <HintPath>Library\PackageCache\com.unity.ext.nunit@d8c07649098d\net40\unity-custom\nunit.framework.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="ReportGeneratorMerged">
-      <HintPath>Library\PackageCache\com.unity.testtools.codecoverage@19a841221620\lib\ReportGenerator\ReportGeneratorMerged.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
     <Reference Include="Newtonsoft.Json">
       <HintPath>Library\PackageCache\com.unity.nuget.newtonsoft-json@4dfd81071c64\Runtime\Newtonsoft.Json.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Mono.Cecil">
-      <HintPath>Library\PackageCache\com.unity.nuget.mono-cecil@ecb9724e46ff\Mono.Cecil.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="mscorlib">
@@ -1130,30 +1430,6 @@
       <HintPath>C:\Unity\Editor\Data\UnityReferenceAssemblies\unity-4.8-api\Facades\System.Xml.XPath.XDocument.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="Unity.TextMeshPro">
-      <HintPath>Library\ScriptAssemblies\Unity.TextMeshPro.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Unity.XR.Interaction.Toolkit">
-      <HintPath>Library\ScriptAssemblies\Unity.XR.Interaction.Toolkit.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Unity.XR.Interaction.Toolkit.Editor">
-      <HintPath>Library\ScriptAssemblies\Unity.XR.Interaction.Toolkit.Editor.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Unity.XR.CoreUtils">
-      <HintPath>Library\ScriptAssemblies\Unity.XR.CoreUtils.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Unity.XR.CoreUtils.Editor">
-      <HintPath>Library\ScriptAssemblies\Unity.XR.CoreUtils.Editor.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Unity.InputSystem">
-      <HintPath>Library\ScriptAssemblies\Unity.InputSystem.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
     <Reference Include="UnityEngine.UI">
       <HintPath>Library\ScriptAssemblies\UnityEngine.UI.dll</HintPath>
       <Private>False</Private>
@@ -1172,6 +1448,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="MCPForUnity.Runtime.csproj" />
   </ItemGroup>
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
   <ItemGroup>
