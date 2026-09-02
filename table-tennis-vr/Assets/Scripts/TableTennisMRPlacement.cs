@@ -21,6 +21,8 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
     [SerializeField] private Camera xrCamera;
     [SerializeField] private float tableHeight = 0.76f;
     [SerializeField] private float placementDistance = 2.0f;
+    [SerializeField] private float rotationSpeed = 90f;
+    [SerializeField] private float rotationSmoothTime = 0.08f;
     [SerializeField] private bool hideTableUntilPlaced = false;
 
     private readonly List<ARRaycastHit> raycastHits = new();
@@ -32,6 +34,9 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
     private bool previousTrigger;
     private bool previousCalibrationInput;
     private bool localCalibrationComplete;
+    private float targetYaw;
+    private float yawVelocity;
+    private bool rotationInitialized;
     private Renderer[] tableRenderers;
     private Collider[] tableColliders;
 
@@ -93,6 +98,8 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
             previousCalibrationInput = calibrationInput;
             return;
         }
+
+        UpdateTableRotation();
 
         bool triggerPressed = ReadPlacementInput();
         if (triggerPressed && !previousTrigger && !IsPlaced)
@@ -156,7 +163,40 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         placementConfirmed.Value = false;
         calibratedPlayers.Value = 0;
         localCalibrationComplete = false;
+        rotationInitialized = false;
         SetTableVisible(!hideTableUntilPlaced);
+    }
+
+    /// <summary>
+    /// Rotates the placed table continuously around its vertical axis. The
+    /// input is analog and smoothed, so it does not snap to fixed angles.
+    /// </summary>
+    public void RotateTable(float input)
+    {
+        if (!IsPlaced || tableRoot == null || Mathf.Abs(input) < 0.01f)
+        {
+            return;
+        }
+
+        if (!rotationInitialized)
+        {
+            targetYaw = tableRoot.eulerAngles.y;
+            rotationInitialized = true;
+        }
+
+        targetYaw += input * rotationSpeed * Time.deltaTime;
+        float smoothedYaw = Mathf.SmoothDampAngle(
+            tableRoot.eulerAngles.y,
+            targetYaw,
+            ref yawVelocity,
+            rotationSmoothTime);
+        Quaternion rotation = Quaternion.Euler(0f, smoothedYaw, 0f);
+        tableRoot.rotation = rotation;
+
+        if (IsSpawned && IsServer)
+        {
+            networkRotation.Value = rotation;
+        }
     }
 
     private void ConfigureARComponents()
@@ -308,6 +348,37 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         bool primary = false;
         bool controller = device.isValid && device.TryGetFeatureValue(UnityEngine.XR.CommonUsages.primaryButton, out primary) && primary;
         return keyboard || controller;
+    }
+
+    private void UpdateTableRotation()
+    {
+        if (!IsPlaced)
+        {
+            return;
+        }
+
+        float keyboard = 0f;
+        if (UnityEngine.InputSystem.Keyboard.current != null)
+        {
+            if (UnityEngine.InputSystem.Keyboard.current.aKey.isPressed)
+            {
+                keyboard -= 1f;
+            }
+            if (UnityEngine.InputSystem.Keyboard.current.dKey.isPressed)
+            {
+                keyboard += 1f;
+            }
+        }
+
+        InputDevice device = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
+        Vector2 stick = Vector2.zero;
+        if (device.isValid)
+        {
+            device.TryGetFeatureValue(CommonUsages.primary2DAxis, out stick);
+        }
+
+        float input = Mathf.Abs(stick.x) > Mathf.Abs(keyboard) ? stick.x : keyboard;
+        RotateTable(input);
     }
 
     private void ApplyNetworkPlacement()
