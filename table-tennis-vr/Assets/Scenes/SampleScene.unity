@@ -11189,7 +11189,10 @@ MonoBehaviour:
   xrCamera: {fileID: 0}
   tableHeight: 0.76
   placementDistance: 2
+  rotationSpeed: 90
+  rotationSmoothTime: 0.08
   hideTableUntilPlaced: 0
+  tableStartsLocked: 1
 --- !u!1 &1351058435
 GameObject:
   m_ObjectHideFlags: 0
@@ -14482,8 +14485,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4966719baa26e4b0e8231a24d9bd491a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.XR.ARFoundation::UnityEngine.XR.ARFoundation.ARCameraManager
-  m_FocusMode: 1
-  m_LightEstimationMode: 0
+  m_FocusMode: -1
+  m_LightEstimationMode: -1
   m_AutoFocus: 1
   m_ImageStabilization: 0
   m_LightEstimation: 0

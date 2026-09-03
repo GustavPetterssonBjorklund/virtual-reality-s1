@@ -5,6 +5,8 @@ using UnityEngine;
 using UnityEngine.XR;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
+using UnityEngine.XR.Interaction.Toolkit;
+using UnityEngine.XR.Interaction.Toolkit.Interactables;
 using Unity.XR.CoreUtils;
 #if UNITY_ANDROID && !UNITY_EDITOR
 using UnityEngine.Android;
@@ -24,6 +26,7 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
     [SerializeField] private float rotationSpeed = 90f;
     [SerializeField] private float rotationSmoothTime = 0.08f;
     [SerializeField] private bool hideTableUntilPlaced = false;
+    [SerializeField] private bool tableStartsLocked = true;
 
     private readonly List<ARRaycastHit> raycastHits = new();
     private ARRaycastManager raycastManager;
@@ -37,6 +40,9 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
     private float targetYaw;
     private float yawVelocity;
     private bool rotationInitialized;
+    private bool locallySelected;
+    private XRGrabInteractable tableGrabInteractable;
+    private Rigidbody tableBody;
     private Renderer[] tableRenderers;
     private Collider[] tableColliders;
 
@@ -44,10 +50,12 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
     private readonly NetworkVariable<Vector3> networkPosition = new();
     private readonly NetworkVariable<Quaternion> networkRotation = new();
     private readonly NetworkVariable<int> calibratedPlayers = new();
+    private readonly NetworkVariable<bool> tableLocked = new(true);
 
     public bool IsPlaced => placementConfirmed.Value;
+    public bool IsTableLocked => tableLocked.Value;
     public bool IsLocallyCalibrated => localCalibrationComplete;
-    public bool CanStartMatch => IsPlaced && calibratedPlayers.Value >= ConnectedPlayerCount();
+    public bool CanStartMatch => IsPlaced && calibratedPlayers.Value >= CountConnectedPlayers();
 
     private void Awake()
     {
@@ -62,7 +70,8 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         }
 
         tableRenderers = tableRoot.GetComponentsInChildren<Renderer>(true);
-        tableColliders = tableRoot.GetComponentsInChildren<Collider>(true);
+        tableColliders = GetTableColliders();
+        ConfigureTableInteraction();
         ConfigureARComponents();
 
         if (hideTableUntilPlaced)
@@ -76,7 +85,9 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         placementConfirmed.OnValueChanged += HandlePlacementChanged;
         networkPosition.OnValueChanged += HandlePositionChanged;
         networkRotation.OnValueChanged += HandleRotationChanged;
+        tableLocked.OnValueChanged += HandleLockChanged;
         ApplyNetworkPlacement();
+        ApplyLockState();
     }
 
     private new void OnDestroy()
@@ -84,6 +95,12 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         placementConfirmed.OnValueChanged -= HandlePlacementChanged;
         networkPosition.OnValueChanged -= HandlePositionChanged;
         networkRotation.OnValueChanged -= HandleRotationChanged;
+        tableLocked.OnValueChanged -= HandleLockChanged;
+        if (tableGrabInteractable != null)
+        {
+            tableGrabInteractable.selectEntered.RemoveListener(HandleSelectEntered);
+            tableGrabInteractable.selectExited.RemoveListener(HandleSelectExited);
+        }
     }
 
     private void Update()
@@ -96,6 +113,7 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
                 MarkCalibrationComplete();
             }
             previousCalibrationInput = calibrationInput;
+            UpdateTableRotation();
             return;
         }
 
@@ -164,7 +182,23 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         calibratedPlayers.Value = 0;
         localCalibrationComplete = false;
         rotationInitialized = false;
+        tableLocked.Value = tableStartsLocked;
         SetTableVisible(!hideTableUntilPlaced);
+        ApplyLockState();
+    }
+
+    /// <summary>Toggles whether the table can be grabbed from the default UI.</summary>
+    public void ToggleTableLock()
+    {
+        bool nextState = !IsTableLocked;
+        if (IsSpawned && !IsServer)
+        {
+            SetTableLockedServerRpc(nextState);
+            return;
+        }
+
+        tableLocked.Value = nextState;
+        ApplyLockState();
     }
 
     /// <summary>
@@ -173,7 +207,7 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
     /// </summary>
     public void RotateTable(float input)
     {
-        if (!IsPlaced || tableRoot == null || Mathf.Abs(input) < 0.01f)
+        if (!IsPlaced || IsTableLocked || !locallySelected || tableRoot == null || Mathf.Abs(input) < 0.01f)
         {
             return;
         }
@@ -193,10 +227,7 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         Quaternion rotation = Quaternion.Euler(0f, smoothedYaw, 0f);
         tableRoot.rotation = rotation;
 
-        if (IsSpawned && IsServer)
-        {
-            networkRotation.Value = rotation;
-        }
+        PublishTablePose(rotation);
     }
 
     private void ConfigureARComponents()
@@ -352,7 +383,7 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
 
     private void UpdateTableRotation()
     {
-        if (!IsPlaced)
+        if (!IsPlaced || IsTableLocked || !locallySelected)
         {
             return;
         }
@@ -381,6 +412,132 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         RotateTable(input);
     }
 
+    private void LateUpdate()
+    {
+        if (!locallySelected || IsTableLocked || tableRoot == null)
+        {
+            return;
+        }
+
+        // XRGrabInteractable supplies position from the dynamic grab point.
+        // We own rotation here so the table remains upright and only yaw is
+        // changed by the thumbstick.
+        Quaternion uprightRotation = Quaternion.Euler(0f, tableRoot.eulerAngles.y, 0f);
+        tableRoot.rotation = uprightRotation;
+        PublishTablePose(uprightRotation);
+    }
+
+    private void ConfigureTableInteraction()
+    {
+        tableBody = tableRoot.GetComponent<Rigidbody>();
+        if (tableBody == null)
+        {
+            tableBody = tableRoot.gameObject.AddComponent<Rigidbody>();
+        }
+        tableBody.isKinematic = true;
+        tableBody.useGravity = false;
+
+        tableGrabInteractable = tableRoot.GetComponent<XRGrabInteractable>();
+        if (tableGrabInteractable == null)
+        {
+            tableGrabInteractable = tableRoot.gameObject.AddComponent<XRGrabInteractable>();
+        }
+
+        tableGrabInteractable.useDynamicAttach = true;
+        tableGrabInteractable.snapToColliderVolume = false;
+        tableGrabInteractable.attachEaseInTime = 0f;
+
+        tableGrabInteractable.trackPosition = true;
+        tableGrabInteractable.trackRotation = false;
+        tableGrabInteractable.trackScale = false;
+        tableGrabInteractable.throwOnDetach = false;
+        tableGrabInteractable.movementType = XRBaseInteractable.MovementType.Instantaneous;
+        tableGrabInteractable.colliders.Clear();
+        foreach (Collider item in tableColliders)
+        {
+            tableGrabInteractable.colliders.Add(item);
+        }
+        tableGrabInteractable.selectEntered.AddListener(HandleSelectEntered);
+        tableGrabInteractable.selectExited.AddListener(HandleSelectExited);
+        ApplyLockState();
+    }
+
+    private Collider[] GetTableColliders()
+    {
+        List<Collider> result = new();
+        foreach (Collider item in tableRoot.GetComponentsInChildren<Collider>(true))
+        {
+            Transform owner = item.transform;
+            bool isTableGeometry = owner == tableRoot ||
+                (owner.parent == tableRoot &&
+                 (owner.name == "Table Top" ||
+                  owner.name == "Net" ||
+                  owner.name.StartsWith("Table Leg")));
+
+            if (isTableGeometry)
+            {
+                result.Add(item);
+            }
+        }
+        return result.ToArray();
+    }
+
+    private void HandleSelectEntered(SelectEnterEventArgs _)
+    {
+        if (IsTableLocked)
+        {
+            return;
+        }
+
+        locallySelected = true;
+        rotationInitialized = false;
+    }
+
+    private void HandleSelectExited(SelectExitEventArgs _)
+    {
+        locallySelected = false;
+        rotationInitialized = false;
+        PublishTablePose(tableRoot.rotation);
+    }
+
+    private void ApplyLockState()
+    {
+        if (tableGrabInteractable == null)
+        {
+            return;
+        }
+
+        if (IsTableLocked && locallySelected)
+        {
+            tableGrabInteractable.interactionManager?.CancelInteractableSelection((IXRSelectInteractable)tableGrabInteractable);
+            locallySelected = false;
+        }
+        tableGrabInteractable.enabled = !IsTableLocked;
+    }
+
+    private void HandleLockChanged(bool _, bool __)
+    {
+        ApplyLockState();
+    }
+
+    private void PublishTablePose(Quaternion rotation)
+    {
+        if (tableRoot == null || IsTableLocked)
+        {
+            return;
+        }
+
+        if (IsSpawned && IsServer)
+        {
+            networkPosition.Value = tableRoot.position;
+            networkRotation.Value = rotation;
+        }
+        else if (IsSpawned && locallySelected)
+        {
+            SubmitTablePoseServerRpc(tableRoot.position, rotation);
+        }
+    }
+
     private void ApplyNetworkPlacement()
     {
         if (tableRoot == null || !placementConfirmed.Value)
@@ -388,7 +545,10 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
             return;
         }
 
-        tableRoot.SetPositionAndRotation(networkPosition.Value, networkRotation.Value);
+        if (!locallySelected)
+        {
+            tableRoot.SetPositionAndRotation(networkPosition.Value, networkRotation.Value);
+        }
         SetTableVisible(true);
     }
 
@@ -420,7 +580,7 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         }
     }
 
-    private int ConnectedPlayerCount()
+    private int CountConnectedPlayers()
     {
         return IsSpawned && NetworkManager.Singleton != null ? NetworkManager.Singleton.ConnectedClientsIds.Count : 1;
     }
@@ -428,6 +588,26 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     private void MarkCalibrationCompleteServerRpc()
     {
-        calibratedPlayers.Value = Mathf.Min(ConnectedPlayerCount(), calibratedPlayers.Value + 1);
+        calibratedPlayers.Value = Mathf.Min(CountConnectedPlayers(), calibratedPlayers.Value + 1);
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    private void SetTableLockedServerRpc(bool locked)
+    {
+        tableLocked.Value = locked;
+        ApplyLockState();
+    }
+
+    [Rpc(SendTo.Server, Delivery = RpcDelivery.Unreliable, InvokePermission = RpcInvokePermission.Everyone)]
+    private void SubmitTablePoseServerRpc(Vector3 position, Quaternion rotation)
+    {
+        if (IsTableLocked || tableRoot == null)
+        {
+            return;
+        }
+
+        tableRoot.SetPositionAndRotation(position, Quaternion.Euler(0f, rotation.eulerAngles.y, 0f));
+        networkPosition.Value = tableRoot.position;
+        networkRotation.Value = tableRoot.rotation;
     }
 }
