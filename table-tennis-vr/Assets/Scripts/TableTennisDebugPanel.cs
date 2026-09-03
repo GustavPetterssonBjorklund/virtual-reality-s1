@@ -94,6 +94,7 @@ public sealed class TableTennisDebugPanel : MonoBehaviour
         CreateButton(panel.transform, "POINT P2", new Vector2(225f, -45f), () => match.DebugAwardPoint(2));
         CreateButton(panel.transform, "LAUNCH BALL", new Vector2(-125f, -115f), LaunchBall);
         CreateButton(panel.transform, "FREEZE BALL", new Vector2(75f, -115f), () => ball.DebugSetFrozen(!ball.IsFrozen));
+        CreateButton(panel.transform, "FORCE START MATCH", new Vector2(-125f, -185f), ForceStartMatch);
         CreateText(panel.transform, "Launch speed: 4.5 m/s", 17f, new Vector2(250f, -115f), new Vector2(220f, 35f));
     }
 
@@ -112,6 +113,14 @@ public sealed class TableTennisDebugPanel : MonoBehaviour
     {
         match.DebugResetBall();
         ball.DebugLaunch(new Vector3(-launchSpeed, 1.4f, Random.Range(-1.2f, 1.2f)));
+    }
+
+    private void ForceStartMatch()
+    {
+        // Deliberately bypasses TableTennisMenu's MR placement/calibration
+        // gate so table placement and physics can be tested independently.
+        RuntimeDiagnostics.Log("Debug force-start requested; bypassing MR readiness gate.");
+        match.ForceStartSoloMatch();
     }
 
     private static GameObject CreateObject(string name, Transform parent)

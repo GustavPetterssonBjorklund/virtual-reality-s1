@@ -34,7 +34,7 @@ Spelaren kan använda riktiga handrörelser, se bollen i tre dimensioner och på
 
 Timing, precision och känslan av att lyckas returnera en snabb boll. Bollens riktning och hastighet påverkas av hur spelaren träffar den.
 
-Spelet är helt VR-baserat. AR och mixed reality ingår inte.
+Spelet migreras till mixed reality på Meta Quest. Den virtuella bordtennisplanen placeras i spelarens riktiga rum med passthrough och horisontell planidentifiering.
 
 ## 3. Skisser
 
