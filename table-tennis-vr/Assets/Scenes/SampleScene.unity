@@ -11047,6 +11047,7 @@ GameObject:
   - component: {fileID: 1328640066}
   - component: {fileID: 1328640067}
   - component: {fileID: 1328640068}
+  - component: {fileID: 1328640069}
   m_Layer: 0
   m_Name: Table Tennis Table
   m_TagString: Untagged
@@ -11193,6 +11194,17 @@ MonoBehaviour:
   rotationSmoothTime: 0.08
   hideTableUntilPlaced: 0
   tableStartsLocked: 1
+--- !u!114 &1328640069
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_GameObject: {fileID: 1328640060}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c50f86858f6ae6e37a3de21670482c6f, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::ARWalkingOnlyLocomotion
 --- !u!1 &1351058435
 GameObject:
   m_ObjectHideFlags: 0
