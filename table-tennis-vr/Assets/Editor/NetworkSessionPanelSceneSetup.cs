@@ -21,6 +21,9 @@ public static class NetworkSessionPanelSceneSetup
             throw new MissingComponentException("SampleScene has no TableTennisNetworkSession.");
 
         var existing = GameObject.Find("UI/Network Session Panel");
+        Transform sessionControls = existing == null ? null : existing.transform.Find("Panel/Session Panel Controls");
+        if (sessionControls != null)
+            sessionControls.SetParent(null, true);
         if (existing != null)
             Object.DestroyImmediate(existing);
 
@@ -42,6 +45,8 @@ public static class NetworkSessionPanelSceneSetup
         panelBackground.sprite = null;
         panelBackground.type = Image.Type.Simple;
         panelBackground.color = PanelBlue;
+        if (sessionControls != null)
+            sessionControls.SetParent(panel.transform, false);
 
         var title = Text("NETWORK SESSION Label", panel.transform, "NETWORK SESSION", 38f, new Vector2(0f, 183f), new Vector2(560f, 58f));
         title.fontStyle = FontStyles.Bold;

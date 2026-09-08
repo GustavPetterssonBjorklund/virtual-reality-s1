@@ -71,6 +71,7 @@
     <Compile Include="Assets\VRTemplateAssets\Scripts\CalloutGazeController.cs" />
     <Compile Include="Assets\Scripts\MenuManager.cs" />
     <Compile Include="Assets\Scripts\UIButtonHoverStyle.cs" />
+    <Compile Include="Assets\Scripts\TableTennisMRPlacement.cs" />
     <Compile Include="Assets\Scripts\TableTennisNetworkRacket.cs" />
     <Compile Include="Assets\Scripts\TableTennisHUD.cs" />
     <Compile Include="Assets\VRTemplateAssets\Scripts\StepManager.cs" />
