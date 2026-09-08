@@ -136,9 +136,23 @@ public sealed class TableTennisMatch : NetworkBehaviour
     {
         if (IsOffline)
         {
-            CancelInvoke(nameof(ResetBall));
-            ResetBall();
+            ResetBallImmediately();
+            return;
         }
+
+        if (IsServer)
+        {
+            ResetBallImmediately();
+            return;
+        }
+
+        RequestResetBallServerRpc();
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    private void RequestResetBallServerRpc()
+    {
+        ResetBallImmediately();
     }
 
     [Rpc(SendTo.Server)]
@@ -206,6 +220,12 @@ public sealed class TableTennisMatch : NetworkBehaviour
         offlinePlayerTwoScore = 0;
         offlineIsGameOver = false;
         offlineWinner = 0;
+        CancelInvoke(nameof(ResetBall));
+        ResetBall();
+    }
+
+    private void ResetBallImmediately()
+    {
         CancelInvoke(nameof(ResetBall));
         ResetBall();
     }
