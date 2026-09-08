@@ -5,6 +5,8 @@
 **/[Uu]ser[Ss]ettings/
 **/[Oo]bj/
 **/[Bb]uild/
+!**/Packages/com.coplaydev.unity-mcp/Editor/Tools/[Bb]uild/
+!**/Packages/com.coplaydev.unity-mcp/Editor/Tools/[Bb]uild/**
 **/[Bb]uilds/
 **/[Mm]emoryCaptures/
 **/[Rr]ecordings/
