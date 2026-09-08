@@ -67,6 +67,7 @@
     <Compile Include="Assets\VRTemplateAssets\Scripts\DestroyObject.cs" />
     <Compile Include="Assets\VRTemplateAssets\Scripts\VideoTimeScrubControl.cs" />
     <Compile Include="Assets\Scripts\TableTennisScoreZone.cs" />
+    <Compile Include="Assets\Scripts\ARWalkingOnlyLocomotion.cs" />
     <Compile Include="Assets\VRTemplateAssets\Scripts\Callout.cs" />
     <Compile Include="Assets\VRTemplateAssets\Scripts\CalloutGazeController.cs" />
     <Compile Include="Assets\Scripts\MenuManager.cs" />
