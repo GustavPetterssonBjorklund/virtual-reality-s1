@@ -20,14 +20,17 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
 
     private NetworkManager networkManager;
     private UnityTransport transport;
-    private TextMeshProUGUI statusText;
-    private TextMeshProUGUI codeText;
-    private TMP_InputField joinCodeInput;
-    private Button hostButton;
-    private Button joinButton;
+    [Header("Lobby UI")]
+    [SerializeField] private Canvas networkCanvas;
+    [SerializeField] private TextMeshProUGUI statusText;
+    [SerializeField] private TextMeshProUGUI codeText;
+    [SerializeField] private TMP_InputField joinCodeInput;
+    [SerializeField] private Button hostButton;
+    [SerializeField] private Button joinButton;
     private bool isBusy;
     private TouchScreenKeyboard questKeyboard;
     private Coroutine keyboardActivationRoutine;
+    private EventTrigger.Entry joinCodePointerClickEntry;
     private string lastKeyboardStatus;
     private int lastKeyboardTextLength = -1;
 
@@ -38,7 +41,7 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
     {
         RuntimeDiagnostics.Log($"Network session Awake. Platform={Application.platform}, isEditor={Application.isEditor}, persistentDataPath={Application.persistentDataPath}");
         EnsureNetworkManager();
-        CreateNetworkPanel();
+        InitializeNetworkPanel();
         networkManager.OnClientConnectedCallback += HandleClientConnected;
         networkManager.OnClientDisconnectCallback += HandleClientDisconnected;
         Application.focusChanged += HandleApplicationFocusChanged;
@@ -47,6 +50,7 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
     private void OnDestroy()
     {
         Application.focusChanged -= HandleApplicationFocusChanged;
+        RemoveJoinCodeInputListeners();
         if (networkManager == null)
         {
             return;
@@ -238,33 +242,73 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
         }
     }
 
-    private void CreateNetworkPanel()
+    private void InitializeNetworkPanel()
     {
-        GameObject canvasObject = new GameObject("Network Session Panel", typeof(RectTransform), typeof(Canvas), typeof(GraphicRaycaster));
-        canvasObject.transform.SetPositionAndRotation(new Vector3(2.8f, 1.55f, -0.48f), Quaternion.Euler(0f, 90f, 0f));
-        canvasObject.transform.localScale = Vector3.one * 0.0025f;
-
-        Canvas canvas = canvasObject.GetComponent<Canvas>();
-        canvas.renderMode = RenderMode.WorldSpace;
-        canvas.worldCamera = Camera.main;
-        if (canvas.worldCamera == null)
+        if (networkCanvas == null || statusText == null || codeText == null || joinCodeInput == null || hostButton == null || joinButton == null)
         {
-            canvas.worldCamera = FindFirstCamera();
+            Debug.LogError("Network Session Panel references are missing. Assign the scene UI on Table Tennis Table.", this);
+            enabled = false;
+            return;
         }
-        RuntimeDiagnostics.Log($"Network canvas created. worldCamera={(canvas.worldCamera == null ? "null" : canvas.worldCamera.name)}, mainCamera={(Camera.main == null ? "null" : Camera.main.name)}");
-        canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(700f, 300f);
-        canvasObject.AddComponent<UnityEngine.XR.Interaction.Toolkit.UI.TrackedDeviceGraphicRaycaster>();
 
-        GameObject panel = CreateUiObject("Panel", canvasObject.transform);
-        Image panelImage = panel.AddComponent<Image>();
-        panelImage.color = new Color(0.03f, 0.04f, 0.07f, 0.92f);
-        SetRect(panel, new Vector2(700f, 300f), Vector2.zero, Vector2.one * 0.5f);
+        networkCanvas.worldCamera = Camera.main != null ? Camera.main : FindFirstCamera();
+        joinCodeInput.shouldHideSoftKeyboard = false;
+        joinCodeInput.shouldHideMobileInput = false;
+        ApplySettingsMenuButtonStyle(hostButton);
+        ApplySettingsMenuButtonStyle(joinButton);
+        hostButton.onClick.AddListener(CreateSession);
+        joinButton.onClick.AddListener(JoinSessionFromInput);
+        joinCodeInput.onSelect.AddListener(_ => HandleJoinCodeInputSelected());
+        AddJoinCodePointerClickListener();
+        RuntimeDiagnostics.Log($"Network canvas initialized. worldCamera={(networkCanvas.worldCamera == null ? "null" : networkCanvas.worldCamera.name)}");
+    }
 
-        statusText = CreateText("Status", panel.transform, "Not connected", 24, new Vector2(0f, 105f), new Vector2(640f, 40f));
-        codeText = CreateText("Code", panel.transform, "Create a session or enter a code", 30, new Vector2(0f, 55f), new Vector2(640f, 55f));
-        joinCodeInput = CreateInputField(panel.transform, new Vector2(-120f, -45f));
-        hostButton = CreateButton(panel.transform, "CREATE", new Vector2(175f, -45f), CreateSession);
-        joinButton = CreateButton(panel.transform, "JOIN", new Vector2(300f, -45f), JoinSessionFromInput);
+    private static void ApplySettingsMenuButtonStyle(Button button)
+    {
+        button.transition = Selectable.Transition.None;
+        if (button.targetGraphic is Image background)
+        {
+            background.color = Color.white;
+        }
+
+        if (button.GetComponent<UIButtonHoverStyle>() == null)
+        {
+            button.gameObject.AddComponent<UIButtonHoverStyle>();
+        }
+    }
+
+    private void AddJoinCodePointerClickListener()
+    {
+        EventTrigger trigger = joinCodeInput.GetComponent<EventTrigger>();
+        if (trigger == null)
+        {
+            trigger = joinCodeInput.gameObject.AddComponent<EventTrigger>();
+        }
+
+        trigger.triggers ??= new System.Collections.Generic.List<EventTrigger.Entry>();
+        joinCodePointerClickEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
+        joinCodePointerClickEntry.callback.AddListener(HandleJoinCodeInputClicked);
+        trigger.triggers.Add(joinCodePointerClickEntry);
+    }
+
+    private void HandleJoinCodeInputClicked(BaseEventData _)
+    {
+        // XR pointer clicks do not fire onSelect again while the field remains selected.
+        // Explicitly reactivate it so every press can reopen a dismissed system keyboard.
+        joinCodeInput.ActivateInputField();
+        HandleJoinCodeInputSelected();
+    }
+
+    private void RemoveJoinCodeInputListeners()
+    {
+        if (joinCodeInput == null || joinCodePointerClickEntry == null)
+        {
+            return;
+        }
+
+        EventTrigger trigger = joinCodeInput.GetComponent<EventTrigger>();
+        trigger?.triggers?.Remove(joinCodePointerClickEntry);
+        joinCodePointerClickEntry = null;
     }
 
     private void SetStatus(string message)
@@ -337,7 +381,6 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
         input.shouldHideSoftKeyboard = false;
         input.shouldHideMobileInput = false;
 
-        input.onSelect.AddListener(_ => HandleJoinCodeInputSelected());
         return input;
     }
 
@@ -349,6 +392,8 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
             return;
         }
 
+        joinCodeInput.shouldHideSoftKeyboard = false;
+        joinCodeInput.shouldHideMobileInput = false;
         RuntimeDiagnostics.Log($"Join input selected. active={joinCodeInput.gameObject.activeInHierarchy}, enabled={joinCodeInput.enabled}, interactable={joinCodeInput.interactable}, selected={IsJoinCodeInputSelected()}, eventSystemExists={EventSystem.current != null}, keyboardSupported={TouchScreenKeyboard.isSupported}, shouldHideSoftKeyboard={joinCodeInput.shouldHideSoftKeyboard}, shouldHideMobileInput={joinCodeInput.shouldHideMobileInput}");
         if (keyboardActivationRoutine != null)
         {
@@ -364,7 +409,7 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
 
         if (joinCodeInput == null || !TouchScreenKeyboard.isSupported)
         {
-            RuntimeDiagnostics.LogWarning($"Quest keyboard unavailable. inputExists={joinCodeInput != null}, supported={TouchScreenKeyboard.isSupported}");
+            RuntimeDiagnostics.LogWarning($"System keyboard unavailable on {Application.platform}. In the Unity Editor, keep the field selected and type with the computer keyboard; the Quest keyboard is only available in an Android headset build.");
             keyboardActivationRoutine = null;
             yield break;
         }
