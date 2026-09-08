@@ -11185,8 +11185,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TableTennisMRPlacement
   ShowTopMostFoldoutHeaderGroup: 1
-  tableRoot: {fileID: 0}
-  xrCamera: {fileID: 0}
+  tableRoot: {fileID: 1328640061}
+  xrCamera: {fileID: 7917674758326848207, guid: 77e7c27b2c5525e4aa8cc9f99d654486, type: 3}
   tableHeight: 0.76
   placementDistance: 2
   rotationSpeed: 90
