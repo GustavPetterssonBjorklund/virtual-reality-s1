@@ -19,6 +19,8 @@ using UnityEngine.Android;
 /// </summary>
 public sealed class TableTennisMRPlacement : NetworkBehaviour
 {
+    private const ulong NoGrabber = ulong.MaxValue;
+
     [SerializeField] private Transform tableRoot;
     [SerializeField] private Camera xrCamera;
     [SerializeField] private float tableHeight = 0.76f;
@@ -41,6 +43,8 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
     private float yawVelocity;
     private bool rotationInitialized;
     private bool locallySelected;
+    private bool grabRequestPending;
+    private float grabRequestDeadline;
     private XRGrabInteractable tableGrabInteractable;
     private Rigidbody tableBody;
     private Renderer[] tableRenderers;
@@ -51,6 +55,7 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
     private readonly NetworkVariable<Quaternion> networkRotation = new();
     private readonly NetworkVariable<int> calibratedPlayers = new();
     private readonly NetworkVariable<bool> tableLocked = new(true);
+    private readonly NetworkVariable<ulong> activeGrabber = new(NoGrabber);
 
     public bool IsPlaced => placementConfirmed.Value;
     public bool IsTableLocked => tableLocked.Value;
@@ -86,6 +91,7 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         networkPosition.OnValueChanged += HandlePositionChanged;
         networkRotation.OnValueChanged += HandleRotationChanged;
         tableLocked.OnValueChanged += HandleLockChanged;
+        activeGrabber.OnValueChanged += HandleGrabberChanged;
         ApplyNetworkPlacement();
         ApplyLockState();
     }
@@ -96,6 +102,7 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         networkPosition.OnValueChanged -= HandlePositionChanged;
         networkRotation.OnValueChanged -= HandleRotationChanged;
         tableLocked.OnValueChanged -= HandleLockChanged;
+        activeGrabber.OnValueChanged -= HandleGrabberChanged;
         if (tableGrabInteractable != null)
         {
             tableGrabInteractable.selectEntered.RemoveListener(HandleSelectEntered);
@@ -105,6 +112,15 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
 
     private void Update()
     {
+        if (grabRequestPending && Time.unscaledTime >= grabRequestDeadline)
+        {
+            grabRequestPending = false;
+            locallySelected = false;
+            rotationInitialized = false;
+            tableGrabInteractable.interactionManager?.CancelInteractableSelection(
+                (IXRSelectInteractable)tableGrabInteractable);
+        }
+
         if (IsSpawned && !IsServer)
         {
             bool calibrationInput = ReadCalibrationInput();
@@ -183,6 +199,7 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         localCalibrationComplete = false;
         rotationInitialized = false;
         tableLocked.Value = tableStartsLocked;
+        activeGrabber.Value = NoGrabber;
         SetTableVisible(!hideTableUntilPlaced);
         ApplyLockState();
     }
@@ -491,13 +508,46 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
 
         locallySelected = true;
         rotationInitialized = false;
+
+        if (IsSpawned)
+        {
+            if (IsServer)
+            {
+                activeGrabber.Value = NetworkManager.LocalClientId;
+            }
+            else
+            {
+                grabRequestPending = true;
+                grabRequestDeadline = Time.unscaledTime + 0.25f;
+                RequestTableGrabServerRpc();
+            }
+        }
     }
 
     private void HandleSelectExited(SelectExitEventArgs _)
     {
         locallySelected = false;
+        grabRequestPending = false;
         rotationInitialized = false;
-        PublishTablePose(tableRoot.rotation);
+
+        if (IsSpawned)
+        {
+            if (IsServer)
+            {
+                if (activeGrabber.Value == NetworkManager.LocalClientId)
+                {
+                    activeGrabber.Value = NoGrabber;
+                }
+            }
+            else
+            {
+                ReleaseTableGrabServerRpc();
+            }
+        }
+        else
+        {
+            PublishTablePose(tableRoot.rotation);
+        }
     }
 
     private void ApplyLockState()
@@ -511,6 +561,8 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         {
             tableGrabInteractable.interactionManager?.CancelInteractableSelection((IXRSelectInteractable)tableGrabInteractable);
             locallySelected = false;
+            grabRequestPending = false;
+            rotationInitialized = false;
         }
         tableGrabInteractable.enabled = !IsTableLocked;
     }
@@ -518,6 +570,26 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
     private void HandleLockChanged(bool _, bool __)
     {
         ApplyLockState();
+    }
+
+    private void HandleGrabberChanged(ulong _, ulong newGrabber)
+    {
+        if (!locallySelected || !IsSpawned || IsServer || NetworkManager.Singleton == null)
+        {
+            return;
+        }
+
+        if (newGrabber == NetworkManager.Singleton.LocalClientId)
+        {
+            grabRequestPending = false;
+        }
+        else if (!grabRequestPending)
+        {
+            tableGrabInteractable.interactionManager?.CancelInteractableSelection(
+                (IXRSelectInteractable)tableGrabInteractable);
+            locallySelected = false;
+            rotationInitialized = false;
+        }
     }
 
     private void PublishTablePose(Quaternion rotation)
@@ -595,13 +667,38 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
     private void SetTableLockedServerRpc(bool locked)
     {
         tableLocked.Value = locked;
+        if (locked)
+        {
+            activeGrabber.Value = NoGrabber;
+        }
         ApplyLockState();
     }
 
-    [Rpc(SendTo.Server, Delivery = RpcDelivery.Unreliable, InvokePermission = RpcInvokePermission.Everyone)]
-    private void SubmitTablePoseServerRpc(Vector3 position, Quaternion rotation)
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    private void RequestTableGrabServerRpc(RpcParams rpcParams = default)
     {
-        if (IsTableLocked || tableRoot == null)
+        ulong sender = rpcParams.Receive.SenderClientId;
+        if (tableLocked.Value || (activeGrabber.Value != NoGrabber && activeGrabber.Value != sender))
+        {
+            return;
+        }
+
+        activeGrabber.Value = sender;
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    private void ReleaseTableGrabServerRpc(RpcParams rpcParams = default)
+    {
+        if (activeGrabber.Value == rpcParams.Receive.SenderClientId)
+        {
+            activeGrabber.Value = NoGrabber;
+        }
+    }
+
+    [Rpc(SendTo.Server, Delivery = RpcDelivery.Unreliable, InvokePermission = RpcInvokePermission.Everyone)]
+    private void SubmitTablePoseServerRpc(Vector3 position, Quaternion rotation, RpcParams rpcParams = default)
+    {
+        if (IsTableLocked || tableRoot == null || activeGrabber.Value != rpcParams.Receive.SenderClientId)
         {
             return;
         }
