@@ -7,8 +7,8 @@ public sealed class TableTennisMenu : MonoBehaviour
     private TableTennisMatch match;
     private TableTennisMRPlacement mrPlacement;
     private Button startButton;
-    private Button tableLockButton;
-    private TMP_Text tableLockLabel;
+    [SerializeField] private Button tableLockButton;
+    [SerializeField] private TMP_Text tableLockLabel;
     private bool lastTableLockState;
 
     private void Awake()
@@ -26,92 +26,26 @@ public sealed class TableTennisMenu : MonoBehaviour
             }
         }
 
-        TryCreateTableLockButton();
+        RefreshTableLockLabel();
     }
 
     private void Update()
     {
-        if (mrPlacement == null || tableLockButton == null)
+        if (mrPlacement != null && mrPlacement.IsTableLocked != lastTableLockState)
         {
-            TryCreateTableLockButton();
-            return;
-        }
-
-        bool locked = mrPlacement.IsTableLocked;
-        if (locked == lastTableLockState)
-        {
-            return;
-        }
-
-        lastTableLockState = locked;
-        if (tableLockLabel != null)
-        {
-            tableLockLabel.text = locked ? "UNLOCK TABLE" : "LOCK TABLE";
+            RefreshTableLockLabel();
         }
     }
 
-    private void CreateTableLockButton()
+    private void RefreshTableLockLabel()
     {
-        Button sourceButton = startButton;
-        if (sourceButton == null)
-        {
-            GameObject createButton = GameObject.Find("Network Session Panel/Panel/CREATE Button");
-            if (createButton != null)
-            {
-                sourceButton = createButton.GetComponent<Button>();
-            }
-        }
-
-        if (sourceButton == null)
+        if (tableLockButton == null || tableLockLabel == null || mrPlacement == null)
         {
             return;
         }
 
-        GameObject buttonObject = Instantiate(sourceButton.gameObject, sourceButton.transform.parent);
-        buttonObject.name = "Table Lock Button";
-
-        RectTransform sourceRect = sourceButton.GetComponent<RectTransform>();
-        RectTransform buttonRect = buttonObject.GetComponent<RectTransform>();
-        Vector2 offset = sourceButton == startButton ? new Vector2(0f, -90f) : new Vector2(0f, -70f);
-        buttonRect.anchoredPosition = sourceRect.anchoredPosition + offset;
-
-        tableLockButton = buttonObject.GetComponent<Button>();
-        tableLockButton.onClick.RemoveAllListeners();
-        tableLockButton.onClick.AddListener(ToggleTableLock);
-        tableLockLabel = buttonObject.GetComponentInChildren<TMP_Text>(true);
-        lastTableLockState = mrPlacement != null && mrPlacement.IsTableLocked;
-        if (tableLockLabel != null)
-        {
-            tableLockLabel.text = lastTableLockState ? "UNLOCK TABLE" : "LOCK TABLE";
-        }
-    }
-
-    private void TryCreateTableLockButton()
-    {
-        if (tableLockButton != null || mrPlacement == null)
-        {
-            return;
-        }
-
-        if (startButton == null)
-        {
-            GameObject startButtonObject = GameObject.Find("Start Match Button");
-            if (startButtonObject != null)
-            {
-                startButton = startButtonObject.GetComponent<Button>();
-            }
-        }
-
-        CreateTableLockButton();
-    }
-
-
-    private void ToggleTableLock()
-    {
-        if (mrPlacement != null)
-        {
-            mrPlacement.ToggleTableLock();
-        }
+        lastTableLockState = mrPlacement.IsTableLocked;
+        tableLockLabel.text = lastTableLockState ? "UNLOCK TABLE" : "LOCK TABLE";
     }
 
     public void StartOrRestartMatch()
@@ -138,11 +72,6 @@ public sealed class TableTennisMenu : MonoBehaviour
         if (startButton != null)
         {
             startButton.onClick.RemoveListener(StartOrRestartMatch);
-        }
-
-        if (tableLockButton != null)
-        {
-            tableLockButton.onClick.RemoveListener(ToggleTableLock);
         }
     }
 }
