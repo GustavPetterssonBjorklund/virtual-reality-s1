@@ -12044,12 +12044,12 @@ MonoBehaviour:
   racketPrefab: {fileID: 5617678960556187694, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
   maxConnections: 1
   connectionType: dtls
-  networkCanvas: {fileID: 574723936}
-  statusText: {fileID: 82848282}
-  codeText: {fileID: 98056828}
-  joinCodeInput: {fileID: 2030706807}
-  hostButton: {fileID: 1836202900}
-  joinButton: {fileID: 1982139880}
+  networkCanvas: {fileID: 0}
+  statusText: {fileID: 0}
+  codeText: {fileID: 0}
+  joinCodeInput: {fileID: 0}
+  hostButton: {fileID: 0}
+  joinButton: {fileID: 0}
 --- !u!114 &1328640067
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -12088,11 +12088,12 @@ MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1328640060}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: c50f86858f6ae6e37a3de21670482c6f, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ARWalkingOnlyLocomotion
 --- !u!1 &1351058435
 GameObject:

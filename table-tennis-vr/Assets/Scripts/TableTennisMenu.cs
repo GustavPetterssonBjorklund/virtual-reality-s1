@@ -118,7 +118,7 @@ public sealed class TableTennisMenu : MonoBehaviour
     {
         if (mrPlacement != null && !mrPlacement.IsPlaced)
         {
-            mrPlacement.PlaceUsingFallback();
+            mrPlacement.ConfirmCurrentPlacement();
         }
 
         if (mrPlacement != null && !mrPlacement.CanStartMatch)
