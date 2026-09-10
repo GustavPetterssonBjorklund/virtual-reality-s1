@@ -12274,8 +12274,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2ece2a5f72e16f9eab38908a356aa50b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TableTennisMenu
-  tableLockButton: {fileID: 1047820417}
-  tableLockLabel: {fileID: 1148650163}
 --- !u!114 &1328640065
 MonoBehaviour:
   m_ObjectHideFlags: 0

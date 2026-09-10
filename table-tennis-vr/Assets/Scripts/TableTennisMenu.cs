@@ -7,8 +7,8 @@ public sealed class TableTennisMenu : MonoBehaviour
     private TableTennisMatch match;
     private TableTennisMRPlacement mrPlacement;
     private Button startButton;
-    [SerializeField] private Button tableLockButton;
-    [SerializeField] private TMP_Text tableLockLabel;
+    private Button tableLockButton;
+    private TMP_Text tableLockLabel;
     private bool lastTableLockState;
 
     private void Awake()
@@ -24,6 +24,13 @@ public sealed class TableTennisMenu : MonoBehaviour
             {
                 startButton.onClick.AddListener(StartOrRestartMatch);
             }
+        }
+
+        GameObject tableLockObject = GameObject.Find("Table Lock Button");
+        if (tableLockObject != null)
+        {
+            tableLockButton = tableLockObject.GetComponent<Button>();
+            tableLockLabel = tableLockObject.transform.Find("Label")?.GetComponent<TMP_Text>();
         }
 
         RefreshTableLockLabel();
