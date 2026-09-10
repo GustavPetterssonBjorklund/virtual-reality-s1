@@ -35,7 +35,6 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
     private ARPlaneManager planeManager;
     private ARCameraManager cameraManager;
     private ARSession arSession;
-    private ARAnchor tableAnchor;
     private bool previousTrigger;
     private bool previousCalibrationInput;
     private bool localCalibrationComplete;
@@ -87,6 +86,14 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
+        // Hosting must adopt the pose already arranged in this room, including
+        // edits made before the NetworkObject was spawned.
+        if (IsServer)
+        {
+            networkPosition.Value = tableRoot.position;
+            networkRotation.Value = tableRoot.rotation;
+        }
+
         placementConfirmed.OnValueChanged += HandlePlacementChanged;
         networkPosition.OnValueChanged += HandlePositionChanged;
         networkRotation.OnValueChanged += HandleRotationChanged;
@@ -147,6 +154,12 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
     public void ConfirmPlacement()
     {
         TryPlaceFromView();
+    }
+
+    /// <summary>Confirms the visible table without moving it toward the headset.</summary>
+    public void ConfirmCurrentPlacement()
+    {
+        ConfirmPlacement(new Pose(tableRoot.position, tableRoot.rotation));
     }
 
     /// <summary>Places the table in front of the camera when no plane is available.</summary>
@@ -215,6 +228,10 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         }
 
         tableLocked.Value = nextState;
+        if (!nextState && !IsPlaced)
+        {
+            ConfirmCurrentPlacement();
+        }
         ApplyLockState();
     }
 
@@ -252,12 +269,15 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         GameObject virtualEnvironment = GameObject.Find("Environment");
         if (virtualEnvironment != null)
         {
-            // Keep the template floor colliders active so the player and
-            // teleport system still have a safety floor in MR. Hide only the
-            // visual meshes; passthrough supplies the real room background.
+            // The VR template geometry does not describe the physical room.
+            // Hidden geometry must not obstruct MR placement or tracked motion.
             foreach (Renderer renderer in virtualEnvironment.GetComponentsInChildren<Renderer>(true))
             {
                 renderer.enabled = false;
+            }
+            foreach (Collider collider in virtualEnvironment.GetComponentsInChildren<Collider>(true))
+            {
+                collider.enabled = false;
             }
         }
 
@@ -367,11 +387,8 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         }
 
         tableRoot.SetPositionAndRotation(pose.position, pose.rotation);
-        tableAnchor = tableRoot.GetComponent<ARAnchor>();
-        if (tableAnchor == null)
-        {
-            tableAnchor = tableRoot.gameObject.AddComponent<ARAnchor>();
-        }
+        // This transform is owned by grabbing and network placement. An
+        // ARAnchor on the same object would also write its tracked pose.
         networkPosition.Value = pose.position;
         networkRotation.Value = pose.rotation;
         placementConfirmed.Value = true;
@@ -382,11 +399,10 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
 
     private bool ReadPlacementInput()
     {
-        bool keyboard = UnityEngine.InputSystem.Keyboard.current != null && UnityEngine.InputSystem.Keyboard.current.spaceKey.isPressed;
-        UnityEngine.XR.InputDevice device = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
-        bool trigger = false;
-        bool controller = device.isValid && device.TryGetFeatureValue(UnityEngine.XR.CommonUsages.triggerButton, out trigger) && trigger;
-        return keyboard || controller;
+        // Controller triggers belong to UI selection and grabbing. Placement
+        // from the view is explicit; Space remains an Editor testing shortcut.
+        return Application.isEditor && UnityEngine.InputSystem.Keyboard.current != null &&
+            UnityEngine.InputSystem.Keyboard.current.spaceKey.isPressed;
     }
 
     private bool ReadCalibrationInput()
@@ -599,7 +615,7 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
             return;
         }
 
-        if (IsSpawned && IsServer)
+        if (!IsSpawned || IsServer)
         {
             networkPosition.Value = tableRoot.position;
             networkRotation.Value = rotation;
@@ -667,6 +683,10 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
     private void SetTableLockedServerRpc(bool locked)
     {
         tableLocked.Value = locked;
+        if (!locked && !IsPlaced)
+        {
+            ConfirmCurrentPlacement();
+        }
         if (locked)
         {
             activeGrabber.Value = NoGrabber;
