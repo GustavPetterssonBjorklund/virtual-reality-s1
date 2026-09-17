@@ -1,44 +1,71 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
 
 public sealed class TableTennisNetworkRacket : NetworkBehaviour
 {
-    private UnityEngine.XR.Interaction.Toolkit.Interactables.XRGrabInteractable grabInteractable;
+    private XRGrabInteractable grabInteractable;
     private Rigidbody body;
+
+    public bool IsPhysicsAuthority => !IsSpawned || IsOwner;
+    public bool IsKinematic => body != null && body.isKinematic;
 
     private void Awake()
     {
-        grabInteractable = GetComponent<UnityEngine.XR.Interaction.Toolkit.Interactables.XRGrabInteractable>();
+        grabInteractable = GetComponent<XRGrabInteractable>();
         body = GetComponent<Rigidbody>();
-        body.isKinematic = false;
         body.useGravity = true;
         body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         body.interpolation = RigidbodyInterpolation.Interpolate;
     }
 
+    private void Start()
+    {
+        ApplyInteractionAuthority();
+        RestoreOfflinePhysics();
+    }
+
     public override void OnNetworkSpawn()
     {
-        if (grabInteractable != null)
-        {
-            grabInteractable.enabled = IsOwner;
-        }
+        ApplyInteractionAuthority();
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        ApplyInteractionAuthority();
     }
 
     private void Update()
     {
-        if (!IsSpawned || !IsOwner)
+        RestoreOfflinePhysics();
+    }
+
+    private void ApplyInteractionAuthority()
+    {
+        if (grabInteractable != null)
+        {
+            grabInteractable.enabled = !IsSpawned || IsOwner;
+        }
+    }
+
+    private void RestoreOfflinePhysics()
+    {
+        if (IsSpawned || (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening))
         {
             return;
         }
 
-        SubmitPoseServerRpc(transform.position, transform.rotation);
-    }
+        // NetworkRigidbody keeps unspawned instances kinematic. The in-scene
+        // racket doubles as the offline racket, so restore its local physics.
+        if (body != null && body.isKinematic)
+        {
+            body.isKinematic = false;
+        }
 
-    [ServerRpc(Delivery = RpcDelivery.Unreliable)]
-    private void SubmitPoseServerRpc(Vector3 position, Quaternion rotation)
-    {
-        body.MovePosition(position);
-        body.MoveRotation(rotation);
+        if (grabInteractable != null && !grabInteractable.enabled)
+        {
+            grabInteractable.enabled = true;
+        }
     }
 }

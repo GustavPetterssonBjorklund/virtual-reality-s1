@@ -11,11 +11,13 @@ public sealed class TableTennisMatch : NetworkBehaviour
     private readonly NetworkVariable<int> playerTwoScore = new();
     private readonly NetworkVariable<bool> isGameOver = new();
     private readonly NetworkVariable<int> winner = new();
+    private readonly NetworkVariable<bool> matchActive = new();
 
     public int PlayerOneScore => IsOffline ? offlinePlayerOneScore : playerOneScore.Value;
     public int PlayerTwoScore => IsOffline ? offlinePlayerTwoScore : playerTwoScore.Value;
     public bool IsGameOver => IsOffline ? offlineIsGameOver : isGameOver.Value;
     public int Winner => IsOffline ? offlineWinner : winner.Value;
+    public bool IsMatchActive => IsOffline ? offlineMatchActive : matchActive.Value;
     public int PointsToWin => pointsToWin;
     public int RequiredLead => requiredLead;
 
@@ -25,6 +27,7 @@ public sealed class TableTennisMatch : NetworkBehaviour
     private int offlinePlayerTwoScore;
     private bool offlineIsGameOver;
     private int offlineWinner;
+    private bool offlineMatchActive;
 
     private bool IsOffline => !IsSpawned && (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening);
 
@@ -70,12 +73,14 @@ public sealed class TableTennisMatch : NetworkBehaviour
         {
             isGameOver.Value = true;
             winner.Value = 1;
+            matchActive.Value = false;
             Debug.Log("Player 1 wins the match.");
         }
         else if (HasWon(PlayerTwoScore, PlayerOneScore))
         {
             isGameOver.Value = true;
             winner.Value = 2;
+            matchActive.Value = false;
             Debug.Log("Player 2 wins the match.");
         }
         else
@@ -178,6 +183,8 @@ public sealed class TableTennisMatch : NetworkBehaviour
         playerTwoScore.Value = 0;
         isGameOver.Value = false;
         winner.Value = 0;
+        matchActive.Value = true;
+        FindFirstObjectByType<TableTennisMRPlacement>()?.LockForMatch();
         CancelInvoke(nameof(ResetBall));
         ResetBall();
     }
@@ -202,11 +209,13 @@ public sealed class TableTennisMatch : NetworkBehaviour
         {
             offlineIsGameOver = true;
             offlineWinner = 1;
+            offlineMatchActive = false;
         }
         else if (HasWon(PlayerTwoScore, PlayerOneScore))
         {
             offlineIsGameOver = true;
             offlineWinner = 2;
+            offlineMatchActive = false;
         }
         else
         {
@@ -220,6 +229,8 @@ public sealed class TableTennisMatch : NetworkBehaviour
         offlinePlayerTwoScore = 0;
         offlineIsGameOver = false;
         offlineWinner = 0;
+        offlineMatchActive = true;
+        FindFirstObjectByType<TableTennisMRPlacement>()?.LockForMatch();
         CancelInvoke(nameof(ResetBall));
         ResetBall();
     }

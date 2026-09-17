@@ -221,6 +221,13 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
     public void ToggleTableLock()
     {
         bool nextState = !IsTableLocked;
+        TableTennisMatch match = GetComponent<TableTennisMatch>();
+        if (!nextState && match != null && match.IsMatchActive)
+        {
+            RuntimeDiagnostics.LogWarning("Table unlock ignored while a match is active.");
+            return;
+        }
+
         if (IsSpawned && !IsServer)
         {
             SetTableLockedServerRpc(nextState);
@@ -232,6 +239,25 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         {
             ConfirmCurrentPlacement();
         }
+        ApplyLockState();
+    }
+
+    /// <summary>Locks the shared table before authoritative gameplay starts.</summary>
+    public void LockForMatch()
+    {
+        if (IsTableLocked)
+        {
+            return;
+        }
+
+        if (IsSpawned && !IsServer)
+        {
+            SetTableLockedServerRpc(true);
+            return;
+        }
+
+        tableLocked.Value = true;
+        activeGrabber.Value = NoGrabber;
         ApplyLockState();
     }
 
@@ -682,6 +708,12 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     private void SetTableLockedServerRpc(bool locked)
     {
+        TableTennisMatch match = GetComponent<TableTennisMatch>();
+        if (!locked && match != null && match.IsMatchActive)
+        {
+            return;
+        }
+
         tableLocked.Value = locked;
         if (!locked && !IsPlaced)
         {
