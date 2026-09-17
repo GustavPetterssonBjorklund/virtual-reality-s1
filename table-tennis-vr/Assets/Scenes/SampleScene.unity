@@ -5054,6 +5054,12 @@ MonoBehaviour:
   racketPrefab: {fileID: 5617678960556187694, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
   maxConnections: 1
   connectionType: dtls
+  networkCanvas: {fileID: 574723936}
+  statusText: {fileID: 82848282}
+  codeText: {fileID: 98056828}
+  joinCodeInput: {fileID: 2030706807}
+  hostButton: {fileID: 1836202900}
+  joinButton: {fileID: 1982139880}
 --- !u!114 &1328640067
 MonoBehaviour:
   m_ObjectHideFlags: 0
