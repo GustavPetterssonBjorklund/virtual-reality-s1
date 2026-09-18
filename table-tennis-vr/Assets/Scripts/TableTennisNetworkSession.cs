@@ -226,6 +226,8 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
             }
         }
 
+        networkManager.NetworkConfig.TickRate = 60;
+
         if (racketPrefab != null && !networkManager.NetworkConfig.Prefabs.Contains(racketPrefab))
         {
             networkManager.NetworkConfig.Prefabs.Add(new NetworkPrefab { Prefab = racketPrefab });

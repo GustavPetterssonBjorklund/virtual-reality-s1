@@ -68,6 +68,7 @@ public sealed class TableTennisDebugPanel : MonoBehaviour
         telemetry.text = $"SCORE   {match.PlayerOneScore} - {match.PlayerTwoScore}\n" +
                          $"BALL    {ball.transform.position:F2}\n" +
                          $"SPEED   {ball.LinearVelocity.magnitude:F2} m/s\n" +
+                         $"SPIN    {ball.AngularVelocity.magnitude:F1} rad/s\n" +
                          networkTelemetry +
                          $"FPS     {(1f / Mathf.Max(Time.unscaledDeltaTime, 0.0001f)):F0}\n" +
                          $"AI      {(opponent.IsEnabled ? "ACTIVE" : "OFF")}\n" +
@@ -87,7 +88,8 @@ public sealed class TableTennisDebugPanel : MonoBehaviour
         string role = manager.IsHost ? "HOST" : manager.IsServer ? "SERVER" : "CLIENT";
         string result = $"NET     {role} tick {manager.NetworkConfig.TickRate} RTT {rtt} ms\n" +
                         $"BALL    {(ball.IsPhysicsAuthority ? "AUTH" : "REPL")} " +
-                        $"{(ball.IsKinematic ? "KIN" : "DYN")}\n";
+                        $"{(ball.IsKinematic ? "KIN" : "DYN")} " +
+                        $"hit {ball.LastHitSequence} handoff {ball.LastAuthoritySequence}\n";
 
         TableTennisNetworkRacket[] rackets = FindObjectsByType<TableTennisNetworkRacket>(FindObjectsSortMode.None);
         for (int i = 0; i < rackets.Length; i++)

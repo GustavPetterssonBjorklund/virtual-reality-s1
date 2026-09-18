@@ -77,6 +77,7 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
     public bool IsLocallyCalibrated => localCalibrationComplete;
     public bool CanStartMatch => !IsSpawned ? IsPlaced : IsPlaced && allPlayersAligned.Value;
     public Collider[] TableColliders => tableColliders;
+    public Transform TableRoot => tableRoot;
 
     private void Awake()
     {

@@ -6,9 +6,14 @@ using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
 public sealed class TableTennisNetworkRacket : NetworkBehaviour
 {
+    private const float MaxSweepStep = 0.02f;
+    private const float MaxSweepAngle = 5f;
+    private const int MaxSweepSubsteps = 8;
+
     private XRGrabInteractable grabInteractable;
     private Rigidbody body;
     private Collider[] racketColliders;
+    private BoxCollider paddleCollider;
     private TableTennisMRPlacement tablePlacement;
     private bool ignoresTableCollision;
     private Transform spawnParent;
@@ -18,6 +23,11 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
     private Vector3 spawnWorldPosition;
     private Quaternion spawnWorldRotation;
     private bool hasSpawnPose;
+    private bool hasPreviousPhysicsPose;
+    private bool ballCollisionsIgnored;
+    private Vector3 previousPhysicsPosition;
+    private Quaternion previousPhysicsRotation;
+    private uint hitSequence;
 
     public bool IsPhysicsAuthority => !IsSpawned || IsOwner;
     public bool IsKinematic => body != null && body.isKinematic;
@@ -30,6 +40,15 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
         body.useGravity = true;
         body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         body.interpolation = RigidbodyInterpolation.Interpolate;
+
+        foreach (Collider racketCollider in racketColliders)
+        {
+            if (racketCollider is BoxCollider box &&
+                (paddleCollider == null || box.transform == transform))
+            {
+                paddleCollider = box;
+            }
+        }
 
         if (grabInteractable != null)
         {
@@ -80,6 +99,170 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
     private void Update()
     {
         RestoreOfflinePhysics();
+    }
+
+    private void FixedUpdate()
+    {
+        EnsureNativeBallCollisionsIgnored();
+
+        if (!IsPhysicsAuthority || paddleCollider == null)
+        {
+            hasPreviousPhysicsPose = false;
+            return;
+        }
+
+        Vector3 currentPosition = transform.position;
+        Quaternion currentRotation = transform.rotation;
+        if (!hasPreviousPhysicsPose)
+        {
+            previousPhysicsPosition = currentPosition;
+            previousPhysicsRotation = currentRotation;
+            hasPreviousPhysicsPose = true;
+            return;
+        }
+
+        SweepForBall(
+            previousPhysicsPosition,
+            previousPhysicsRotation,
+            currentPosition,
+            currentRotation);
+        previousPhysicsPosition = currentPosition;
+        previousPhysicsRotation = currentRotation;
+    }
+
+    private void SweepForBall(
+        Vector3 fromPosition,
+        Quaternion fromRotation,
+        Vector3 toPosition,
+        Quaternion toRotation)
+    {
+        float distance = Vector3.Distance(fromPosition, toPosition);
+        float angle = Quaternion.Angle(fromRotation, toRotation);
+        int substeps = Mathf.Clamp(
+            Mathf.Max(
+                Mathf.CeilToInt(distance / MaxSweepStep),
+                Mathf.CeilToInt(angle / MaxSweepAngle)),
+            1,
+            MaxSweepSubsteps);
+
+        float fixedDelta = Mathf.Max(Time.fixedDeltaTime, 0.001f);
+        Vector3 paddleVelocity = (toPosition - fromPosition) / fixedDelta;
+        Vector3 paddleAngularVelocity = CalculateAngularVelocity(
+            fromRotation, toRotation, fixedDelta);
+        Vector3 halfExtents = Vector3.Scale(
+            paddleCollider.size * 0.5f,
+            Abs(transform.lossyScale));
+
+        for (int step = 1; step <= substeps; step++)
+        {
+            float t = step / (float)substeps;
+            Vector3 posePosition = Vector3.Lerp(fromPosition, toPosition, t);
+            Quaternion poseRotation = Quaternion.Slerp(fromRotation, toRotation, t);
+            Vector3 center = posePosition + poseRotation * Vector3.Scale(
+                paddleCollider.center,
+                transform.lossyScale);
+
+            Collider[] overlaps = Physics.OverlapBox(
+                center,
+                halfExtents,
+                poseRotation,
+                ~0,
+                QueryTriggerInteraction.Ignore);
+
+            foreach (Collider overlap in overlaps)
+            {
+                TableTennisBall ball = overlap.GetComponentInParent<TableTennisBall>();
+                if (ball == null || !ball.IsPhysicsAuthority)
+                {
+                    continue;
+                }
+
+                IgnoreNativeBallCollision(overlap);
+                Vector3 normal = poseRotation * Vector3.up;
+                Vector3 ballOffset = overlap.bounds.center - center;
+                if (Vector3.Dot(normal, ballOffset) < 0f)
+                {
+                    normal = -normal;
+                }
+
+                Vector3 contactPoint = overlap.bounds.center - normal * 0.02f;
+                ulong hitter = IsSpawned ? OwnerClientId : 0;
+                RacketHitSample hit = new(
+                    hitter,
+                    contactPoint,
+                    normal,
+                    paddleVelocity,
+                    paddleAngularVelocity,
+                    ++hitSequence);
+                if (ball.TryApplyRacketHit(hit))
+                {
+                    return;
+                }
+            }
+        }
+    }
+
+    private void IgnoreNativeBallCollision(Collider ballCollider)
+    {
+        foreach (Collider racketCollider in racketColliders)
+        {
+            if (racketCollider != null && ballCollider != null)
+            {
+                Physics.IgnoreCollision(racketCollider, ballCollider, true);
+            }
+        }
+    }
+
+    private void EnsureNativeBallCollisionsIgnored()
+    {
+        if (ballCollisionsIgnored)
+        {
+            return;
+        }
+
+        TableTennisBall[] balls = FindObjectsByType<TableTennisBall>(FindObjectsSortMode.None);
+        if (balls.Length == 0)
+        {
+            return;
+        }
+
+        foreach (TableTennisBall ball in balls)
+        {
+            foreach (Collider ballCollider in ball.GetComponentsInChildren<Collider>(true))
+            {
+                IgnoreNativeBallCollision(ballCollider);
+            }
+        }
+
+        ballCollisionsIgnored = true;
+    }
+
+    private static Vector3 CalculateAngularVelocity(
+        Quaternion from,
+        Quaternion to,
+        float deltaTime)
+    {
+        Quaternion delta = to * Quaternion.Inverse(from);
+        if (delta.w < 0f)
+        {
+            delta.x = -delta.x;
+            delta.y = -delta.y;
+            delta.z = -delta.z;
+            delta.w = -delta.w;
+        }
+
+        delta.ToAngleAxis(out float angleDegrees, out Vector3 axis);
+        if (float.IsInfinity(axis.x) || angleDegrees < 0.001f)
+        {
+            return Vector3.zero;
+        }
+
+        return axis.normalized * (angleDegrees * Mathf.Deg2Rad / deltaTime);
+    }
+
+    private static Vector3 Abs(Vector3 value)
+    {
+        return new Vector3(Mathf.Abs(value.x), Mathf.Abs(value.y), Mathf.Abs(value.z));
     }
 
     private void ApplyInteractionAuthority()
