@@ -20,14 +20,17 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
 
     private NetworkManager networkManager;
     private UnityTransport transport;
-    private TextMeshProUGUI statusText;
-    private TextMeshProUGUI codeText;
-    private TMP_InputField joinCodeInput;
-    private Button hostButton;
-    private Button joinButton;
+    [Header("Lobby UI")]
+    [SerializeField] private Canvas networkCanvas;
+    [SerializeField] private TextMeshProUGUI statusText;
+    [SerializeField] private TextMeshProUGUI codeText;
+    [SerializeField] private TMP_InputField joinCodeInput;
+    [SerializeField] private Button hostButton;
+    [SerializeField] private Button joinButton;
     private bool isBusy;
     private TouchScreenKeyboard questKeyboard;
     private Coroutine keyboardActivationRoutine;
+    private EventTrigger.Entry joinCodePointerClickEntry;
     private string lastKeyboardStatus;
     private int lastKeyboardTextLength = -1;
 
@@ -38,7 +41,11 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
     {
         RuntimeDiagnostics.Log($"Network session Awake. Platform={Application.platform}, isEditor={Application.isEditor}, persistentDataPath={Application.persistentDataPath}");
         EnsureNetworkManager();
-        CreateNetworkPanel();
+        if (!InitializeNetworkPanel())
+        {
+            return;
+        }
+
         networkManager.OnClientConnectedCallback += HandleClientConnected;
         networkManager.OnClientDisconnectCallback += HandleClientDisconnected;
         Application.focusChanged += HandleApplicationFocusChanged;
@@ -47,6 +54,7 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
     private void OnDestroy()
     {
         Application.focusChanged -= HandleApplicationFocusChanged;
+        RemoveNetworkPanelListeners();
         if (networkManager == null)
         {
             return;
@@ -257,33 +265,24 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
         }
     }
 
-    private void CreateNetworkPanel()
+    private bool InitializeNetworkPanel()
     {
-        GameObject canvasObject = new GameObject("Network Session Panel", typeof(RectTransform), typeof(Canvas), typeof(GraphicRaycaster));
-        canvasObject.transform.SetPositionAndRotation(new Vector3(2.8f, 1.55f, -0.48f), Quaternion.Euler(0f, 90f, 0f));
-        canvasObject.transform.localScale = Vector3.one * 0.0025f;
-
-        Canvas canvas = canvasObject.GetComponent<Canvas>();
-        canvas.renderMode = RenderMode.WorldSpace;
-        canvas.worldCamera = Camera.main;
-        if (canvas.worldCamera == null)
+        if (networkCanvas == null || statusText == null || codeText == null || joinCodeInput == null || hostButton == null || joinButton == null)
         {
-            canvas.worldCamera = FindFirstCamera();
+            Debug.LogError("Network Session Panel references are missing. Assign the movable scene UI on Table Tennis Table.", this);
+            enabled = false;
+            return false;
         }
-        RuntimeDiagnostics.Log($"Network canvas created. worldCamera={(canvas.worldCamera == null ? "null" : canvas.worldCamera.name)}, mainCamera={(Camera.main == null ? "null" : Camera.main.name)}");
-        canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(700f, 300f);
-        canvasObject.AddComponent<UnityEngine.XR.Interaction.Toolkit.UI.TrackedDeviceGraphicRaycaster>();
 
-        GameObject panel = CreateUiObject("Panel", canvasObject.transform);
-        Image panelImage = panel.AddComponent<Image>();
-        panelImage.color = new Color(0.03f, 0.04f, 0.07f, 0.92f);
-        SetRect(panel, new Vector2(700f, 300f), Vector2.zero, Vector2.one * 0.5f);
-
-        statusText = CreateText("Status", panel.transform, "Not connected", 24, new Vector2(0f, 105f), new Vector2(640f, 40f));
-        codeText = CreateText("Code", panel.transform, "Create a session or enter a code", 30, new Vector2(0f, 55f), new Vector2(640f, 55f));
-        joinCodeInput = CreateInputField(panel.transform, new Vector2(-120f, -45f));
-        hostButton = CreateButton(panel.transform, "CREATE", new Vector2(175f, -45f), CreateSession);
-        joinButton = CreateButton(panel.transform, "JOIN", new Vector2(300f, -45f), JoinSessionFromInput);
+        networkCanvas.worldCamera = Camera.main != null ? Camera.main : FindFirstCamera();
+        joinCodeInput.shouldHideSoftKeyboard = false;
+        joinCodeInput.shouldHideMobileInput = false;
+        hostButton.onClick.AddListener(CreateSession);
+        joinButton.onClick.AddListener(JoinSessionFromInput);
+        joinCodeInput.onSelect.AddListener(HandleJoinCodeInputSelected);
+        AddJoinCodePointerClickListener();
+        RuntimeDiagnostics.Log($"Network canvas initialized. worldCamera={(networkCanvas.worldCamera == null ? "null" : networkCanvas.worldCamera.name)}");
+        return true;
     }
 
     private void SetStatus(string message)
@@ -296,69 +295,43 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
         Debug.Log($"[Network] {message}");
     }
 
-    private static GameObject CreateUiObject(string name, Transform parent)
+    private void AddJoinCodePointerClickListener()
     {
-        GameObject gameObject = new GameObject(name, typeof(RectTransform));
-        gameObject.transform.SetParent(parent, false);
-        return gameObject;
+        EventTrigger trigger = joinCodeInput.GetComponent<EventTrigger>();
+        if (trigger == null)
+        {
+            trigger = joinCodeInput.gameObject.AddComponent<EventTrigger>();
+        }
+
+        trigger.triggers ??= new System.Collections.Generic.List<EventTrigger.Entry>();
+        joinCodePointerClickEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
+        joinCodePointerClickEntry.callback.AddListener(HandleJoinCodeInputClicked);
+        trigger.triggers.Add(joinCodePointerClickEntry);
     }
 
-    private static void SetRect(GameObject gameObject, Vector2 size, Vector2 position, Vector2 pivot)
+    private void HandleJoinCodeInputClicked(BaseEventData _)
     {
-        RectTransform rect = gameObject.GetComponent<RectTransform>();
-        rect.sizeDelta = size;
-        rect.anchoredPosition = position;
-        rect.pivot = pivot;
+        joinCodeInput.ActivateInputField();
+        HandleJoinCodeInputSelected();
     }
 
-    private static TextMeshProUGUI CreateText(string name, Transform parent, string text, float fontSize, Vector2 position, Vector2 size)
+    private void RemoveNetworkPanelListeners()
     {
-        GameObject gameObject = CreateUiObject(name, parent);
-        SetRect(gameObject, size, position, Vector2.one * 0.5f);
-        TextMeshProUGUI label = gameObject.AddComponent<TextMeshProUGUI>();
-        label.text = text;
-        label.fontSize = fontSize;
-        label.alignment = TextAlignmentOptions.Center;
-        label.color = Color.white;
-        return label;
+        hostButton?.onClick.RemoveListener(CreateSession);
+        joinButton?.onClick.RemoveListener(JoinSessionFromInput);
+        joinCodeInput?.onSelect.RemoveListener(HandleJoinCodeInputSelected);
+
+        if (joinCodeInput == null || joinCodePointerClickEntry == null)
+        {
+            return;
+        }
+
+        EventTrigger trigger = joinCodeInput.GetComponent<EventTrigger>();
+        trigger?.triggers?.Remove(joinCodePointerClickEntry);
+        joinCodePointerClickEntry = null;
     }
 
-    private TMP_InputField CreateInputField(Transform parent, Vector2 position)
-    {
-        GameObject gameObject = CreateUiObject("Join Code Input", parent);
-        SetRect(gameObject, new Vector2(220f, 55f), position, Vector2.one * 0.5f);
-        Image image = gameObject.AddComponent<Image>();
-        image.color = Color.white;
-
-        GameObject textObject = CreateUiObject("Text", gameObject.transform);
-        SetRect(textObject, new Vector2(200f, 45f), Vector2.zero, Vector2.one * 0.5f);
-        TextMeshProUGUI text = textObject.AddComponent<TextMeshProUGUI>();
-        text.fontSize = 24f;
-        text.color = Color.black;
-        text.alignment = TextAlignmentOptions.Center;
-
-        GameObject placeholderObject = CreateUiObject("Placeholder", gameObject.transform);
-        SetRect(placeholderObject, new Vector2(200f, 45f), Vector2.zero, Vector2.one * 0.5f);
-        TextMeshProUGUI placeholder = placeholderObject.AddComponent<TextMeshProUGUI>();
-        placeholder.text = "ENTER CODE";
-        placeholder.fontSize = 20f;
-        placeholder.color = new Color(0.25f, 0.25f, 0.25f, 1f);
-        placeholder.alignment = TextAlignmentOptions.Center;
-
-        TMP_InputField input = gameObject.AddComponent<TMP_InputField>();
-        input.textComponent = text;
-        input.placeholder = placeholder;
-        input.characterLimit = 12;
-        input.contentType = TMP_InputField.ContentType.Alphanumeric;
-        input.lineType = TMP_InputField.LineType.SingleLine;
-        input.keyboardType = TouchScreenKeyboardType.ASCIICapable;
-        // This must be false: true explicitly prevents Unity from displaying the software keyboard.
-        input.shouldHideSoftKeyboard = false;
-        input.shouldHideMobileInput = false;
-
-        input.onSelect.AddListener(_ => HandleJoinCodeInputSelected());
-        return input;
-    }
+    private void HandleJoinCodeInputSelected(string _) => HandleJoinCodeInputSelected();
 
     private void HandleJoinCodeInputSelected()
     {
@@ -445,16 +418,4 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
         return joinCodeInput != null && EventSystem.current != null && EventSystem.current.currentSelectedGameObject == joinCodeInput.gameObject;
     }
 
-    private static Button CreateButton(Transform parent, string label, Vector2 position, UnityEngine.Events.UnityAction action)
-    {
-        GameObject gameObject = CreateUiObject(label + " Button", parent);
-        SetRect(gameObject, new Vector2(110f, 55f), position, Vector2.one * 0.5f);
-        Image image = gameObject.AddComponent<Image>();
-        image.color = new Color(0.12f, 0.45f, 0.85f, 1f);
-        Button button = gameObject.AddComponent<Button>();
-        button.onClick.AddListener(action);
-        TextMeshProUGUI text = CreateText("Label", gameObject.transform, label, 20f, Vector2.zero, new Vector2(100f, 45f));
-        text.raycastTarget = false;
-        return button;
-    }
 }
