@@ -136,6 +136,20 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
         JoinSession(joinCodeInput == null ? string.Empty : joinCodeInput.text);
     }
 
+    public void ResetBall()
+    {
+        FindFirstObjectByType<TableTennisMatch>()?.DebugResetBall();
+    }
+
+    public void ResetRackets()
+    {
+        TableTennisNetworkRacket[] rackets = FindObjectsByType<TableTennisNetworkRacket>(FindObjectsSortMode.None);
+        foreach (TableTennisNetworkRacket racket in rackets)
+        {
+            racket.RequestResetToSpawn();
+        }
+    }
+
     public async void JoinSession(string joinCode)
     {
         if (isBusy || IsConnected || string.IsNullOrWhiteSpace(joinCode))
