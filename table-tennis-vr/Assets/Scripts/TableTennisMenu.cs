@@ -64,6 +64,7 @@ public sealed class TableTennisMenu : MonoBehaviour
 
         if (mrPlacement != null && !mrPlacement.CanStartMatch)
         {
+            mrPlacement.RetrySharedAlignment();
             RuntimeDiagnostics.LogWarning("Match start blocked until MR placement and headset calibration are complete.");
             return;
         }

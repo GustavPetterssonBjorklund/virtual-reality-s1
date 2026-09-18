@@ -6,25 +6,29 @@ public sealed class TableTennisMatch : NetworkBehaviour
     [SerializeField] private int pointsToWin = 11;
     [SerializeField] private int requiredLead = 2;
     [SerializeField] private float resetDelay = 0.25f;
+    [SerializeField] private Transform ballSpawnAnchor;
 
     private readonly NetworkVariable<int> playerOneScore = new();
     private readonly NetworkVariable<int> playerTwoScore = new();
     private readonly NetworkVariable<bool> isGameOver = new();
     private readonly NetworkVariable<int> winner = new();
+    private readonly NetworkVariable<bool> matchActive = new();
 
     public int PlayerOneScore => IsOffline ? offlinePlayerOneScore : playerOneScore.Value;
     public int PlayerTwoScore => IsOffline ? offlinePlayerTwoScore : playerTwoScore.Value;
     public bool IsGameOver => IsOffline ? offlineIsGameOver : isGameOver.Value;
     public int Winner => IsOffline ? offlineWinner : winner.Value;
+    public bool IsMatchActive => IsOffline ? offlineMatchActive : matchActive.Value;
     public int PointsToWin => pointsToWin;
     public int RequiredLead => requiredLead;
 
     private TableTennisBall ball;
-    private Vector3 servePosition;
+    private Vector3 fallbackServeLocalPosition;
     private int offlinePlayerOneScore;
     private int offlinePlayerTwoScore;
     private bool offlineIsGameOver;
     private int offlineWinner;
+    private bool offlineMatchActive;
 
     private bool IsOffline => !IsSpawned && (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening);
 
@@ -33,7 +37,7 @@ public sealed class TableTennisMatch : NetworkBehaviour
         ball = FindFirstObjectByType<TableTennisBall>();
         if (ball != null)
         {
-            servePosition = ball.transform.position;
+            fallbackServeLocalPosition = transform.InverseTransformPoint(ball.transform.position);
         }
     }
 
@@ -70,12 +74,14 @@ public sealed class TableTennisMatch : NetworkBehaviour
         {
             isGameOver.Value = true;
             winner.Value = 1;
+            matchActive.Value = false;
             Debug.Log("Player 1 wins the match.");
         }
         else if (HasWon(PlayerTwoScore, PlayerOneScore))
         {
             isGameOver.Value = true;
             winner.Value = 2;
+            matchActive.Value = false;
             Debug.Log("Player 2 wins the match.");
         }
         else
@@ -178,6 +184,8 @@ public sealed class TableTennisMatch : NetworkBehaviour
         playerTwoScore.Value = 0;
         isGameOver.Value = false;
         winner.Value = 0;
+        matchActive.Value = true;
+        FindFirstObjectByType<TableTennisMRPlacement>()?.LockForMatch();
         CancelInvoke(nameof(ResetBall));
         ResetBall();
     }
@@ -202,11 +210,13 @@ public sealed class TableTennisMatch : NetworkBehaviour
         {
             offlineIsGameOver = true;
             offlineWinner = 1;
+            offlineMatchActive = false;
         }
         else if (HasWon(PlayerTwoScore, PlayerOneScore))
         {
             offlineIsGameOver = true;
             offlineWinner = 2;
+            offlineMatchActive = false;
         }
         else
         {
@@ -220,6 +230,8 @@ public sealed class TableTennisMatch : NetworkBehaviour
         offlinePlayerTwoScore = 0;
         offlineIsGameOver = false;
         offlineWinner = 0;
+        offlineMatchActive = true;
+        FindFirstObjectByType<TableTennisMRPlacement>()?.LockForMatch();
         CancelInvoke(nameof(ResetBall));
         ResetBall();
     }
@@ -239,6 +251,9 @@ public sealed class TableTennisMatch : NetworkBehaviour
     {
         if (ball != null)
         {
+            Vector3 servePosition = ballSpawnAnchor != null
+                ? ballSpawnAnchor.position
+                : transform.TransformPoint(fallbackServeLocalPosition);
             ball.ResetForServe(servePosition);
         }
     }

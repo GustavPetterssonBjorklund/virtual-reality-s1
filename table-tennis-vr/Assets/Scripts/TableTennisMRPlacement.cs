@@ -1,5 +1,7 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.XR;
@@ -7,19 +9,21 @@ using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
+using UnityEngine.XR.OpenXR.Features.Meta;
 using Unity.XR.CoreUtils;
 #if UNITY_ANDROID && !UNITY_EDITOR
 using UnityEngine.Android;
 #endif
 
 /// <summary>
-/// Places the virtual table in the real room and keeps the placement state
-/// authoritative on the host. AR Foundation is optional in the Editor; the
-/// keyboard/controller fallback makes the flow testable without a headset.
+/// Places the authoritative table and uses one Meta shared spatial anchor to
+/// put every colocated headset into the host's Unity world coordinate frame.
 /// </summary>
 public sealed class TableTennisMRPlacement : NetworkBehaviour
 {
-    private const ulong NoGrabber = ulong.MaxValue;
+    private const int EnhancedSpatialServicesDisabled = -1000169004;
+    private const int MaximumAutomaticLoadAttempts = 5;
+    private const float AnchorRetryDelay = 2f;
 
     [SerializeField] private Transform tableRoot;
     [SerializeField] private Camera xrCamera;
@@ -31,19 +35,30 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
     [SerializeField] private bool tableStartsLocked = true;
 
     private readonly List<ARRaycastHit> raycastHits = new();
+    private readonly HashSet<ulong> alignedClients = new();
+    private readonly List<XRAnchor> loadedAnchors = new();
+
     private ARRaycastManager raycastManager;
     private ARPlaneManager planeManager;
     private ARCameraManager cameraManager;
+    private ARAnchorManager anchorManager;
     private ARSession arSession;
+    private XROrigin xrOrigin;
+    private ARAnchor localSharedAnchor;
+    private Coroutine anchorRetryRoutine;
+    private TableTennisNetworkSession networkSession;
     private bool previousTrigger;
-    private bool previousCalibrationInput;
     private bool localCalibrationComplete;
+    private bool anchorOperationInProgress;
+    private bool sessionOriginCaptured;
+    private Vector3 sessionOriginPosition;
+    private Quaternion sessionOriginRotation;
+    private int anchorOperationVersion;
+    private int loadAttemptCount;
     private float targetYaw;
     private float yawVelocity;
     private bool rotationInitialized;
     private bool locallySelected;
-    private bool grabRequestPending;
-    private float grabRequestDeadline;
     private XRGrabInteractable tableGrabInteractable;
     private Rigidbody tableBody;
     private Renderer[] tableRenderers;
@@ -52,14 +67,15 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
     private readonly NetworkVariable<bool> placementConfirmed = new();
     private readonly NetworkVariable<Vector3> networkPosition = new();
     private readonly NetworkVariable<Quaternion> networkRotation = new();
-    private readonly NetworkVariable<int> calibratedPlayers = new();
+    private readonly NetworkVariable<FixedString64Bytes> sharedAnchorGroupId = new();
+    private readonly NetworkVariable<int> alignmentRevision = new();
+    private readonly NetworkVariable<bool> allPlayersAligned = new();
     private readonly NetworkVariable<bool> tableLocked = new(true);
-    private readonly NetworkVariable<ulong> activeGrabber = new(NoGrabber);
 
     public bool IsPlaced => placementConfirmed.Value;
     public bool IsTableLocked => tableLocked.Value;
     public bool IsLocallyCalibrated => localCalibrationComplete;
-    public bool CanStartMatch => IsPlaced && calibratedPlayers.Value >= CountConnectedPlayers();
+    public bool CanStartMatch => !IsSpawned ? IsPlaced : IsPlaced && allPlayersAligned.Value;
 
     private void Awake()
     {
@@ -73,10 +89,12 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
             xrCamera = Camera.main;
         }
 
+        networkSession = GetComponent<TableTennisNetworkSession>();
         tableRenderers = tableRoot.GetComponentsInChildren<Renderer>(true);
         tableColliders = GetTableColliders();
         ConfigureTableInteraction();
         ConfigureARComponents();
+        Application.focusChanged += HandleApplicationFocusChanged;
 
         if (hideTableUntilPlaced)
         {
@@ -86,62 +104,85 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        // Hosting must adopt the pose already arranged in this room, including
-        // edits made before the NetworkObject was spawned.
+        placementConfirmed.OnValueChanged += HandlePlacementChanged;
+        networkPosition.OnValueChanged += HandlePositionChanged;
+        networkRotation.OnValueChanged += HandleRotationChanged;
+        sharedAnchorGroupId.OnValueChanged += HandleSharedAnchorGroupChanged;
+        alignmentRevision.OnValueChanged += HandleAlignmentRevisionChanged;
+        tableLocked.OnValueChanged += HandleLockChanged;
+
+        if (NetworkManager != null)
+        {
+            NetworkManager.OnClientConnectedCallback += HandleClientConnected;
+            NetworkManager.OnClientDisconnectCallback += HandleClientDisconnected;
+        }
+
         if (IsServer)
         {
             networkPosition.Value = tableRoot.position;
             networkRotation.Value = tableRoot.rotation;
+            RecalculateAllPlayersAligned();
+            if (placementConfirmed.Value)
+            {
+                PublishSharedAnchorAsync();
+            }
+        }
+        else
+        {
+            CaptureSessionOrigin();
+            localCalibrationComplete = false;
         }
 
-        placementConfirmed.OnValueChanged += HandlePlacementChanged;
-        networkPosition.OnValueChanged += HandlePositionChanged;
-        networkRotation.OnValueChanged += HandleRotationChanged;
-        tableLocked.OnValueChanged += HandleLockChanged;
-        activeGrabber.OnValueChanged += HandleGrabberChanged;
         ApplyNetworkPlacement();
         ApplyLockState();
+        TryStartClientAlignment();
     }
 
-    private new void OnDestroy()
+    public override void OnNetworkDespawn()
     {
         placementConfirmed.OnValueChanged -= HandlePlacementChanged;
         networkPosition.OnValueChanged -= HandlePositionChanged;
         networkRotation.OnValueChanged -= HandleRotationChanged;
+        sharedAnchorGroupId.OnValueChanged -= HandleSharedAnchorGroupChanged;
+        alignmentRevision.OnValueChanged -= HandleAlignmentRevisionChanged;
         tableLocked.OnValueChanged -= HandleLockChanged;
-        activeGrabber.OnValueChanged -= HandleGrabberChanged;
+
+        if (NetworkManager != null)
+        {
+            NetworkManager.OnClientConnectedCallback -= HandleClientConnected;
+            NetworkManager.OnClientDisconnectCallback -= HandleClientDisconnected;
+        }
+
+        CancelAnchorOperations();
+        CleanupLocalAnchor();
+        RestoreSessionOrigin();
+        alignedClients.Clear();
+        localCalibrationComplete = false;
+        SetTableVisible(!hideTableUntilPlaced);
+    }
+
+    private new void OnDestroy()
+    {
+        Application.focusChanged -= HandleApplicationFocusChanged;
         if (tableGrabInteractable != null)
         {
             tableGrabInteractable.selectEntered.RemoveListener(HandleSelectEntered);
             tableGrabInteractable.selectExited.RemoveListener(HandleSelectExited);
         }
+
+        CancelAnchorOperations();
+        CleanupLocalAnchor();
+        RestoreSessionOrigin();
     }
 
     private void Update()
     {
-        if (grabRequestPending && Time.unscaledTime >= grabRequestDeadline)
-        {
-            grabRequestPending = false;
-            locallySelected = false;
-            rotationInitialized = false;
-            tableGrabInteractable.interactionManager?.CancelInteractableSelection(
-                (IXRSelectInteractable)tableGrabInteractable);
-        }
-
         if (IsSpawned && !IsServer)
         {
-            bool calibrationInput = ReadCalibrationInput();
-            if (calibrationInput && !previousCalibrationInput)
-            {
-                MarkCalibrationComplete();
-            }
-            previousCalibrationInput = calibrationInput;
-            UpdateTableRotation();
             return;
         }
 
         UpdateTableRotation();
-
         bool triggerPressed = ReadPlacementInput();
         if (triggerPressed && !previousTrigger && !IsPlaced)
         {
@@ -150,22 +191,16 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         previousTrigger = triggerPressed;
     }
 
-    /// <summary>Can be wired to the MR setup panel's Place/Confirm button.</summary>
-    public void ConfirmPlacement()
-    {
-        TryPlaceFromView();
-    }
+    public void ConfirmPlacement() => TryPlaceFromView();
 
-    /// <summary>Confirms the visible table without moving it toward the headset.</summary>
     public void ConfirmCurrentPlacement()
     {
         ConfirmPlacement(new Pose(tableRoot.position, tableRoot.rotation));
     }
 
-    /// <summary>Places the table in front of the camera when no plane is available.</summary>
     public void PlaceUsingFallback()
     {
-        if (xrCamera == null)
+        if (xrCamera == null || (IsSpawned && !IsServer))
         {
             return;
         }
@@ -181,22 +216,37 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         ConfirmPlacement(new Pose(position, Quaternion.LookRotation(forward, Vector3.up)));
     }
 
-    /// <summary>Marks this headset ready after the joiner has aligned the calibration marker.</summary>
-    public void MarkCalibrationComplete()
+    /// <summary>Retries publishing or resolving the current session's shared anchor.</summary>
+    public void RetrySharedAlignment()
     {
-        if (localCalibrationComplete || !IsPlaced)
+        if (!IsSpawned)
         {
             return;
         }
 
-        localCalibrationComplete = true;
-        if (IsSpawned)
+        loadAttemptCount = 0;
+        if (IsServer)
         {
-            MarkCalibrationCompleteServerRpc();
+            if (localCalibrationComplete && !sharedAnchorGroupId.Value.IsEmpty)
+            {
+                ReportAlignmentStatus(allPlayersAligned.Value
+                    ? "Shared table aligned. Ready to start."
+                    : "Table anchor shared. Waiting for Player 2 to align...");
+                return;
+            }
+            if (IsPlaced)
+            {
+                PublishSharedAnchorAsync();
+            }
         }
         else
         {
-            calibratedPlayers.Value = 1;
+            if (localCalibrationComplete)
+            {
+                ReportAlignmentStatus("Shared table aligned. Ready to start.");
+                return;
+            }
+            TryStartClientAlignment();
         }
     }
 
@@ -204,41 +254,65 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
     {
         if (IsSpawned && !IsServer)
         {
+            ReportAlignmentStatus("Only the host can reset the shared table.");
             return;
         }
 
+        CancelAnchorOperations();
+        CleanupLocalAnchor();
+        alignedClients.Clear();
         placementConfirmed.Value = false;
-        calibratedPlayers.Value = 0;
+        sharedAnchorGroupId.Value = default;
+        allPlayersAligned.Value = false;
         localCalibrationComplete = false;
         rotationInitialized = false;
         tableLocked.Value = tableStartsLocked;
-        activeGrabber.Value = NoGrabber;
         SetTableVisible(!hideTableUntilPlaced);
         ApplyLockState();
     }
 
-    /// <summary>Toggles whether the table can be grabbed from the default UI.</summary>
     public void ToggleTableLock()
     {
-        bool nextState = !IsTableLocked;
         if (IsSpawned && !IsServer)
         {
-            SetTableLockedServerRpc(nextState);
+            ReportAlignmentStatus("Only the host can reposition the shared table.");
+            return;
+        }
+
+        bool nextState = !IsTableLocked;
+        TableTennisMatch match = GetComponent<TableTennisMatch>();
+        if (!nextState && match != null && match.IsMatchActive)
+        {
+            RuntimeDiagnostics.LogWarning("Table unlock ignored while a match is active.");
             return;
         }
 
         tableLocked.Value = nextState;
-        if (!nextState && !IsPlaced)
+        if (!nextState)
         {
-            ConfirmCurrentPlacement();
+            InvalidateSharedAlignment();
+            if (!IsPlaced)
+            {
+                ConfirmPlacement(new Pose(tableRoot.position, tableRoot.rotation), false);
+            }
+        }
+        else if (IsSpawned && IsServer && IsPlaced)
+        {
+            PublishSharedAnchorAsync();
         }
         ApplyLockState();
     }
 
-    /// <summary>
-    /// Rotates the placed table continuously around its vertical axis. The
-    /// input is analog and smoothed, so it does not snap to fixed angles.
-    /// </summary>
+    public void LockForMatch()
+    {
+        if (IsTableLocked || (IsSpawned && !IsServer))
+        {
+            return;
+        }
+        tableLocked.Value = true;
+        ApplyLockState();
+    }
+
     public void RotateTable(float input)
     {
         if (!IsPlaced || IsTableLocked || !locallySelected || tableRoot == null || Mathf.Abs(input) < 0.01f)
@@ -253,14 +327,9 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         }
 
         targetYaw += input * rotationSpeed * Time.deltaTime;
-        float smoothedYaw = Mathf.SmoothDampAngle(
-            tableRoot.eulerAngles.y,
-            targetYaw,
-            ref yawVelocity,
-            rotationSmoothTime);
+        float smoothedYaw = Mathf.SmoothDampAngle(tableRoot.eulerAngles.y, targetYaw, ref yawVelocity, rotationSmoothTime);
         Quaternion rotation = Quaternion.Euler(0f, smoothedYaw, 0f);
         tableRoot.rotation = rotation;
-
         PublishTablePose(rotation);
     }
 
@@ -269,8 +338,6 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         GameObject virtualEnvironment = GameObject.Find("Environment");
         if (virtualEnvironment != null)
         {
-            // The VR template geometry does not describe the physical room.
-            // Hidden geometry must not obstruct MR placement or tracked motion.
             foreach (Renderer renderer in virtualEnvironment.GetComponentsInChildren<Renderer>(true))
             {
                 renderer.enabled = false;
@@ -281,31 +348,30 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
             }
         }
 
-        GameObject arOriginObject = FindFirstObjectByType<XROrigin>()?.gameObject ?? gameObject;
+        xrOrigin = FindFirstObjectByType<XROrigin>();
+        GameObject arOriginObject = xrOrigin != null ? xrOrigin.gameObject : gameObject;
         arSession = FindFirstObjectByType<ARSession>();
         if (arSession == null)
         {
-            GameObject sessionObject = new GameObject("MR AR Session");
+            GameObject sessionObject = new("MR AR Session");
             arSession = sessionObject.AddComponent<ARSession>();
         }
 
+        raycastManager = arOriginObject.GetComponent<ARRaycastManager>();
         if (raycastManager == null)
         {
-            raycastManager = arOriginObject.GetComponent<ARRaycastManager>();
-            if (raycastManager == null)
-            {
-                raycastManager = arOriginObject.AddComponent<ARRaycastManager>();
-            }
+            raycastManager = arOriginObject.AddComponent<ARRaycastManager>();
         }
-
+        planeManager = arOriginObject.GetComponent<ARPlaneManager>();
         if (planeManager == null)
         {
-            planeManager = arOriginObject.GetComponent<ARPlaneManager>();
-            if (planeManager == null)
-            {
-                planeManager = arOriginObject.AddComponent<ARPlaneManager>();
-            }
-            planeManager.requestedDetectionMode = PlaneDetectionMode.Horizontal;
+            planeManager = arOriginObject.AddComponent<ARPlaneManager>();
+        }
+        planeManager.requestedDetectionMode = PlaneDetectionMode.Horizontal;
+        anchorManager = arOriginObject.GetComponent<ARAnchorManager>();
+        if (anchorManager == null)
+        {
+            anchorManager = arOriginObject.AddComponent<ARAnchorManager>();
         }
 
         if (xrCamera != null && xrCamera.GetComponent<ARCameraBackground>() == null)
@@ -321,9 +387,6 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
                 cameraManager = xrCamera.gameObject.AddComponent<ARCameraManager>();
             }
             cameraManager.enabled = true;
-
-            // Passthrough is composited behind the camera image. A skybox or
-            // opaque clear color hides it even when the Meta layer is running.
             xrCamera.clearFlags = CameraClearFlags.SolidColor;
             Color transparent = xrCamera.backgroundColor;
             transparent.a = 0f;
@@ -348,7 +411,6 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         {
             yield return null;
         }
-
         if (planeManager != null)
         {
             planeManager.enabled = true;
@@ -358,7 +420,7 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
 
     private void TryPlaceFromView()
     {
-        if (xrCamera == null)
+        if (xrCamera == null || (IsSpawned && !IsServer))
         {
             return;
         }
@@ -375,43 +437,364 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
             ConfirmPlacement(new Pose(hitPose.position, Quaternion.LookRotation(forward, Vector3.up)));
             return;
         }
-
         PlaceUsingFallback();
     }
 
-    private void ConfirmPlacement(Pose pose)
+    private void ConfirmPlacement(Pose pose, bool publishSharedAnchor = true)
     {
         if (IsSpawned && !IsServer)
         {
             return;
         }
 
-        tableRoot.SetPositionAndRotation(pose.position, pose.rotation);
-        // This transform is owned by grabbing and network placement. An
-        // ARAnchor on the same object would also write its tracked pose.
-        networkPosition.Value = pose.position;
-        networkRotation.Value = pose.rotation;
+        Quaternion uprightRotation = Quaternion.Euler(0f, pose.rotation.eulerAngles.y, 0f);
+        tableRoot.SetPositionAndRotation(pose.position, uprightRotation);
+        networkPosition.Value = tableRoot.position;
+        networkRotation.Value = tableRoot.rotation;
         placementConfirmed.Value = true;
-        calibratedPlayers.Value = 1;
-        localCalibrationComplete = true;
         SetTableVisible(true);
+
+        if (!IsSpawned)
+        {
+            localCalibrationComplete = true;
+            return;
+        }
+        if (publishSharedAnchor)
+        {
+            PublishSharedAnchorAsync();
+        }
+    }
+
+    private async void PublishSharedAnchorAsync()
+    {
+        if (!IsSpawned || !IsServer || !IsPlaced || anchorOperationInProgress)
+        {
+            return;
+        }
+
+        int operationVersion = ++anchorOperationVersion;
+        anchorOperationInProgress = true;
+        InvalidateSharedAlignment(false);
+        ReportAlignmentStatus("Creating shared table anchor...");
+
+        try
+        {
+            if (!TryGetMetaAnchorSubsystem(out MetaOpenXRAnchorSubsystem subsystem))
+            {
+                ReportAlignmentStatus("Shared anchors are unavailable on this device. Multiplayer is blocked.");
+                return;
+            }
+            if (subsystem.isSharedAnchorsSupported != Supported.Supported)
+            {
+                ReportAlignmentStatus("This headset does not support Meta shared anchors.");
+                return;
+            }
+
+            UnityEngine.XR.ARSubsystems.SerializableGuid groupId = new(Guid.NewGuid());
+            subsystem.sharedAnchorsGroupId = groupId;
+            CleanupLocalAnchor();
+            Result<ARAnchor> addResult = await anchorManager.TryAddAnchorAsync(new Pose(networkPosition.Value, networkRotation.Value));
+            if (!IsAnchorOperationCurrent(operationVersion))
+            {
+                if (addResult.value != null)
+                {
+                    anchorManager.TryRemoveAnchor(addResult.value);
+                }
+                return;
+            }
+            if (addResult.status.IsError() || addResult.value == null)
+            {
+                ReportAnchorError("Could not create the shared table anchor", addResult.status);
+                return;
+            }
+
+            localSharedAnchor = addResult.value;
+            ReportAlignmentStatus("Sharing table anchor with Player 2...");
+            XRResultStatus shareStatus = await anchorManager.TryShareAnchorAsync(localSharedAnchor);
+            if (!IsAnchorOperationCurrent(operationVersion))
+            {
+                return;
+            }
+            if (shareStatus.IsError())
+            {
+                ReportAnchorError("Could not share the table anchor", shareStatus);
+                return;
+            }
+
+            alignedClients.Clear();
+            alignedClients.Add(NetworkManager.LocalClientId);
+            localCalibrationComplete = true;
+            alignmentRevision.Value++;
+            sharedAnchorGroupId.Value = new FixedString64Bytes(groupId.guid.ToString());
+            RecalculateAllPlayersAligned();
+            ReportAlignmentStatus(allPlayersAligned.Value
+                ? "Shared table aligned. Ready to start."
+                : "Table anchor shared. Waiting for Player 2 to align...");
+        }
+        catch (Exception exception)
+        {
+            ReportAlignmentStatus($"Shared anchor failed: {exception.Message}. Press Start Match to retry.");
+            Debug.LogException(exception, this);
+        }
+        finally
+        {
+            if (operationVersion == anchorOperationVersion)
+            {
+                anchorOperationInProgress = false;
+            }
+        }
+    }
+
+    private void TryStartClientAlignment()
+    {
+        if (!IsSpawned || IsServer || anchorOperationInProgress || alignmentRevision.Value <= 0 || sharedAnchorGroupId.Value.IsEmpty)
+        {
+            return;
+        }
+        LoadSharedAnchorAsync(alignmentRevision.Value, ++anchorOperationVersion);
+    }
+
+    private async void LoadSharedAnchorAsync(int requestedRevision, int operationVersion)
+    {
+        anchorOperationInProgress = true;
+        localCalibrationComplete = false;
+        ApplyNetworkPlacement();
+        loadAttemptCount++;
+        ReportAlignmentStatus($"Locating shared table anchor... ({loadAttemptCount}/{MaximumAutomaticLoadAttempts})");
+
+        try
+        {
+            if (!TryGetMetaAnchorSubsystem(out MetaOpenXRAnchorSubsystem subsystem))
+            {
+                ReportAlignmentStatus("Shared anchors are unavailable on this device. Multiplayer is blocked.");
+                return;
+            }
+            if (subsystem.isSharedAnchorsSupported != Supported.Supported)
+            {
+                ReportAlignmentStatus("This headset does not support Meta shared anchors.");
+                return;
+            }
+            if (!Guid.TryParse(sharedAnchorGroupId.Value.ToString(), out Guid groupGuid))
+            {
+                ReportAlignmentStatus("The shared anchor ID is invalid. Ask the host to replace the table.");
+                return;
+            }
+
+            subsystem.sharedAnchorsGroupId = new UnityEngine.XR.ARSubsystems.SerializableGuid(groupGuid);
+            loadedAnchors.Clear();
+            XRResultStatus loadStatus = await anchorManager.TryLoadAllSharedAnchorsAsync(loadedAnchors, null);
+            if (!IsClientOperationCurrent(requestedRevision, operationVersion))
+            {
+                return;
+            }
+            if (loadStatus.IsError())
+            {
+                ReportAnchorError("Could not load the shared table anchor", loadStatus);
+                if (loadStatus.nativeStatusCode != EnhancedSpatialServicesDisabled)
+                {
+                    ScheduleAnchorRetry(requestedRevision);
+                }
+                return;
+            }
+            if (loadedAnchors.Count == 0)
+            {
+                ReportAlignmentStatus("The shared anchor is still propagating. Retrying...");
+                ScheduleAnchorRetry(requestedRevision);
+                return;
+            }
+
+            TrackableId anchorId = loadedAnchors[0].trackableId;
+            localSharedAnchor = FindAnchor(anchorId);
+            if (localSharedAnchor == null)
+            {
+                await Awaitable.NextFrameAsync();
+                localSharedAnchor = FindAnchor(anchorId);
+            }
+            if (!IsClientOperationCurrent(requestedRevision, operationVersion) || localSharedAnchor == null)
+            {
+                if (localSharedAnchor == null)
+                {
+                    ReportAlignmentStatus("The shared anchor loaded without a trackable pose. Retrying...");
+                    ScheduleAnchorRetry(requestedRevision);
+                }
+                return;
+            }
+
+            AlignOriginToSharedAnchor(localSharedAnchor.transform);
+            localCalibrationComplete = true;
+            ApplyNetworkPlacement();
+            AcknowledgeAlignmentServerRpc(requestedRevision);
+            ReportAlignmentStatus("Shared table aligned. Waiting for the host to start the match.");
+        }
+        catch (Exception exception)
+        {
+            ReportAlignmentStatus($"Shared anchor failed: {exception.Message}. Press Start Match to retry.");
+            Debug.LogException(exception, this);
+        }
+        finally
+        {
+            if (operationVersion == anchorOperationVersion)
+            {
+                anchorOperationInProgress = false;
+            }
+        }
+    }
+
+    private void AlignOriginToSharedAnchor(Transform anchorTransform)
+    {
+        if (xrOrigin == null || anchorTransform == null)
+        {
+            throw new InvalidOperationException("XR Origin or loaded anchor pose is missing.");
+        }
+
+        float yawDelta = Mathf.DeltaAngle(anchorTransform.eulerAngles.y, networkRotation.Value.eulerAngles.y);
+        Quaternion yawCorrection = Quaternion.Euler(0f, yawDelta, 0f);
+        Transform originTransform = xrOrigin.transform;
+        Vector3 correctedPosition = networkPosition.Value + yawCorrection * (originTransform.position - anchorTransform.position);
+        originTransform.SetPositionAndRotation(correctedPosition, yawCorrection * originTransform.rotation);
+    }
+
+    private bool TryGetMetaAnchorSubsystem(out MetaOpenXRAnchorSubsystem subsystem)
+    {
+        subsystem = anchorManager != null ? anchorManager.subsystem as MetaOpenXRAnchorSubsystem : null;
+        return anchorManager != null && anchorManager.enabled && subsystem != null;
+    }
+
+    private ARAnchor FindAnchor(TrackableId trackableId)
+    {
+        if (anchorManager == null)
+        {
+            return null;
+        }
+        foreach (ARAnchor anchor in anchorManager.trackables)
+        {
+            if (anchor.trackableId == trackableId)
+            {
+                return anchor;
+            }
+        }
+        return null;
+    }
+
+    private void ScheduleAnchorRetry(int requestedRevision)
+    {
+        if (loadAttemptCount >= MaximumAutomaticLoadAttempts || requestedRevision != alignmentRevision.Value)
+        {
+            ReportAlignmentStatus("Table alignment failed. Press Start Match to retry.");
+            return;
+        }
+        if (anchorRetryRoutine != null)
+        {
+            StopCoroutine(anchorRetryRoutine);
+        }
+        anchorRetryRoutine = StartCoroutine(RetryAnchorAfterDelay(requestedRevision));
+    }
+
+    private IEnumerator RetryAnchorAfterDelay(int requestedRevision)
+    {
+        yield return new WaitForSecondsRealtime(AnchorRetryDelay);
+        anchorRetryRoutine = null;
+        if (IsSpawned && !IsServer && requestedRevision == alignmentRevision.Value)
+        {
+            anchorOperationInProgress = false;
+            TryStartClientAlignment();
+        }
+    }
+
+    private bool IsAnchorOperationCurrent(int operationVersion)
+    {
+        return this != null && IsSpawned && IsServer && operationVersion == anchorOperationVersion;
+    }
+
+    private bool IsClientOperationCurrent(int requestedRevision, int operationVersion)
+    {
+        return this != null && IsSpawned && !IsServer && requestedRevision == alignmentRevision.Value && operationVersion == anchorOperationVersion;
+    }
+
+    private void InvalidateSharedAlignment(bool cancelCurrentOperation = true)
+    {
+        if (!IsSpawned || !IsServer)
+        {
+            return;
+        }
+        if (cancelCurrentOperation)
+        {
+            CancelAnchorOperations();
+        }
+        alignedClients.Clear();
+        sharedAnchorGroupId.Value = default;
+        allPlayersAligned.Value = false;
+        localCalibrationComplete = false;
+    }
+
+    private void CancelAnchorOperations()
+    {
+        anchorOperationVersion++;
+        anchorOperationInProgress = false;
+        if (anchorRetryRoutine != null)
+        {
+            StopCoroutine(anchorRetryRoutine);
+            anchorRetryRoutine = null;
+        }
+    }
+
+    private void CleanupLocalAnchor()
+    {
+        if (localSharedAnchor != null && anchorManager != null)
+        {
+            anchorManager.TryRemoveAnchor(localSharedAnchor);
+        }
+        localSharedAnchor = null;
+        loadedAnchors.Clear();
+    }
+
+    private void CaptureSessionOrigin()
+    {
+        if (sessionOriginCaptured || xrOrigin == null)
+        {
+            return;
+        }
+        sessionOriginPosition = xrOrigin.transform.position;
+        sessionOriginRotation = xrOrigin.transform.rotation;
+        sessionOriginCaptured = true;
+    }
+
+    private void RestoreSessionOrigin()
+    {
+        if (!sessionOriginCaptured || xrOrigin == null)
+        {
+            return;
+        }
+        xrOrigin.transform.SetPositionAndRotation(sessionOriginPosition, sessionOriginRotation);
+        sessionOriginCaptured = false;
+    }
+
+    private void ReportAnchorError(string prefix, XRResultStatus status)
+    {
+        if (status.nativeStatusCode == EnhancedSpatialServicesDisabled)
+        {
+            ReportAlignmentStatus("Enable Enhanced Spatial Services in Quest settings, then press Start Match to retry.");
+            return;
+        }
+        ReportAlignmentStatus($"{prefix} (error {status.nativeStatusCode}). Press Start Match to retry.");
+    }
+
+    private void ReportAlignmentStatus(string message)
+    {
+        if (networkSession != null)
+        {
+            networkSession.ReportStatus(message);
+        }
+        else
+        {
+            RuntimeDiagnostics.Log($"[Alignment] {message}");
+        }
     }
 
     private bool ReadPlacementInput()
     {
-        // Controller triggers belong to UI selection and grabbing. Placement
-        // from the view is explicit; Space remains an Editor testing shortcut.
         return Application.isEditor && UnityEngine.InputSystem.Keyboard.current != null &&
             UnityEngine.InputSystem.Keyboard.current.spaceKey.isPressed;
-    }
-
-    private bool ReadCalibrationInput()
-    {
-        bool keyboard = UnityEngine.InputSystem.Keyboard.current != null && UnityEngine.InputSystem.Keyboard.current.cKey.isPressed;
-        UnityEngine.XR.InputDevice device = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
-        bool primary = false;
-        bool controller = device.isValid && device.TryGetFeatureValue(UnityEngine.XR.CommonUsages.primaryButton, out primary) && primary;
-        return keyboard || controller;
     }
 
     private void UpdateTableRotation()
@@ -424,37 +807,24 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         float keyboard = 0f;
         if (UnityEngine.InputSystem.Keyboard.current != null)
         {
-            if (UnityEngine.InputSystem.Keyboard.current.aKey.isPressed)
-            {
-                keyboard -= 1f;
-            }
-            if (UnityEngine.InputSystem.Keyboard.current.dKey.isPressed)
-            {
-                keyboard += 1f;
-            }
+            if (UnityEngine.InputSystem.Keyboard.current.aKey.isPressed) keyboard -= 1f;
+            if (UnityEngine.InputSystem.Keyboard.current.dKey.isPressed) keyboard += 1f;
         }
-
         InputDevice device = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
         Vector2 stick = Vector2.zero;
         if (device.isValid)
         {
             device.TryGetFeatureValue(CommonUsages.primary2DAxis, out stick);
         }
-
-        float input = Mathf.Abs(stick.x) > Mathf.Abs(keyboard) ? stick.x : keyboard;
-        RotateTable(input);
+        RotateTable(Mathf.Abs(stick.x) > Mathf.Abs(keyboard) ? stick.x : keyboard);
     }
 
     private void LateUpdate()
     {
-        if (!locallySelected || IsTableLocked || tableRoot == null)
+        if (!locallySelected || IsTableLocked || tableRoot == null || (IsSpawned && !IsServer))
         {
             return;
         }
-
-        // XRGrabInteractable supplies position from the dynamic grab point.
-        // We own rotation here so the table remains upright and only yaw is
-        // changed by the thumbstick.
         Quaternion uprightRotation = Quaternion.Euler(0f, tableRoot.eulerAngles.y, 0f);
         tableRoot.rotation = uprightRotation;
         PublishTablePose(uprightRotation);
@@ -469,17 +839,14 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         }
         tableBody.isKinematic = true;
         tableBody.useGravity = false;
-
         tableGrabInteractable = tableRoot.GetComponent<XRGrabInteractable>();
         if (tableGrabInteractable == null)
         {
             tableGrabInteractable = tableRoot.gameObject.AddComponent<XRGrabInteractable>();
         }
-
         tableGrabInteractable.useDynamicAttach = true;
         tableGrabInteractable.snapToColliderVolume = false;
         tableGrabInteractable.attachEaseInTime = 0f;
-
         tableGrabInteractable.trackPosition = true;
         tableGrabInteractable.trackRotation = false;
         tableGrabInteractable.trackScale = false;
@@ -502,11 +869,7 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         {
             Transform owner = item.transform;
             bool isTableGeometry = owner == tableRoot ||
-                (owner.parent == tableRoot &&
-                 (owner.name == "Table Top" ||
-                  owner.name == "Net" ||
-                  owner.name.StartsWith("Table Leg")));
-
+                (owner.parent == tableRoot && (owner.name == "Table Top" || owner.name == "Net" || owner.name.StartsWith("Table Leg")));
             if (isTableGeometry)
             {
                 result.Add(item);
@@ -517,52 +880,27 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
 
     private void HandleSelectEntered(SelectEnterEventArgs _)
     {
-        if (IsTableLocked)
+        if (IsTableLocked || (IsSpawned && !IsServer))
         {
             return;
         }
-
         locallySelected = true;
         rotationInitialized = false;
-
-        if (IsSpawned)
-        {
-            if (IsServer)
-            {
-                activeGrabber.Value = NetworkManager.LocalClientId;
-            }
-            else
-            {
-                grabRequestPending = true;
-                grabRequestDeadline = Time.unscaledTime + 0.25f;
-                RequestTableGrabServerRpc();
-            }
-        }
+        InvalidateSharedAlignment();
     }
 
     private void HandleSelectExited(SelectExitEventArgs _)
     {
-        locallySelected = false;
-        grabRequestPending = false;
-        rotationInitialized = false;
-
-        if (IsSpawned)
+        if (!locallySelected)
         {
-            if (IsServer)
-            {
-                if (activeGrabber.Value == NetworkManager.LocalClientId)
-                {
-                    activeGrabber.Value = NoGrabber;
-                }
-            }
-            else
-            {
-                ReleaseTableGrabServerRpc();
-            }
+            return;
         }
-        else
+        locallySelected = false;
+        rotationInitialized = false;
+        PublishTablePose(tableRoot.rotation);
+        if (IsSpawned && IsServer && IsPlaced)
         {
-            PublishTablePose(tableRoot.rotation);
+            PublishSharedAnchorAsync();
         }
     }
 
@@ -572,58 +910,26 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         {
             return;
         }
-
-        if (IsTableLocked && locallySelected)
+        bool canManipulate = !IsTableLocked && (!IsSpawned || IsServer);
+        if (!canManipulate && locallySelected)
         {
             tableGrabInteractable.interactionManager?.CancelInteractableSelection((IXRSelectInteractable)tableGrabInteractable);
             locallySelected = false;
-            grabRequestPending = false;
             rotationInitialized = false;
         }
-        tableGrabInteractable.enabled = !IsTableLocked;
+        tableGrabInteractable.enabled = canManipulate;
     }
 
-    private void HandleLockChanged(bool _, bool __)
-    {
-        ApplyLockState();
-    }
-
-    private void HandleGrabberChanged(ulong _, ulong newGrabber)
-    {
-        if (!locallySelected || !IsSpawned || IsServer || NetworkManager.Singleton == null)
-        {
-            return;
-        }
-
-        if (newGrabber == NetworkManager.Singleton.LocalClientId)
-        {
-            grabRequestPending = false;
-        }
-        else if (!grabRequestPending)
-        {
-            tableGrabInteractable.interactionManager?.CancelInteractableSelection(
-                (IXRSelectInteractable)tableGrabInteractable);
-            locallySelected = false;
-            rotationInitialized = false;
-        }
-    }
+    private void HandleLockChanged(bool _, bool __) => ApplyLockState();
 
     private void PublishTablePose(Quaternion rotation)
     {
-        if (tableRoot == null || IsTableLocked)
+        if (tableRoot == null || IsTableLocked || (IsSpawned && !IsServer))
         {
             return;
         }
-
-        if (!IsSpawned || IsServer)
-        {
-            networkPosition.Value = tableRoot.position;
-            networkRotation.Value = rotation;
-        }
-        else if (IsSpawned && locallySelected)
-        {
-            SubmitTablePoseServerRpc(tableRoot.position, rotation);
-        }
+        networkPosition.Value = tableRoot.position;
+        networkRotation.Value = rotation;
     }
 
     private void ApplyNetworkPlacement()
@@ -632,99 +938,110 @@ public sealed class TableTennisMRPlacement : NetworkBehaviour
         {
             return;
         }
-
         if (!locallySelected)
         {
             tableRoot.SetPositionAndRotation(networkPosition.Value, networkRotation.Value);
         }
-        SetTableVisible(true);
+        SetTableVisible(!IsSpawned || IsServer || localCalibrationComplete);
     }
 
-    private void HandlePlacementChanged(bool _, bool __)
+    private void HandlePlacementChanged(bool _, bool __) => ApplyNetworkPlacement();
+    private void HandlePositionChanged(Vector3 _, Vector3 __) => ApplyNetworkPlacement();
+    private void HandleRotationChanged(Quaternion _, Quaternion __) => ApplyNetworkPlacement();
+
+    private void HandleSharedAnchorGroupChanged(FixedString64Bytes _, FixedString64Bytes current)
     {
+        if (IsServer)
+        {
+            return;
+        }
+        CancelAnchorOperations();
+        CleanupLocalAnchor();
+        localCalibrationComplete = false;
         ApplyNetworkPlacement();
+        if (!current.IsEmpty)
+        {
+            loadAttemptCount = 0;
+            TryStartClientAlignment();
+        }
     }
 
-    private void HandlePositionChanged(Vector3 _, Vector3 __)
+    private void HandleAlignmentRevisionChanged(int _, int __)
     {
-        ApplyNetworkPlacement();
-    }
-
-    private void HandleRotationChanged(Quaternion _, Quaternion __)
-    {
-        ApplyNetworkPlacement();
+        if (!IsServer)
+        {
+            loadAttemptCount = 0;
+            TryStartClientAlignment();
+        }
     }
 
     private void SetTableVisible(bool visible)
     {
-        foreach (Renderer item in tableRenderers)
-        {
-            item.enabled = visible;
-        }
-
-        foreach (Collider item in tableColliders)
-        {
-            item.enabled = visible;
-        }
+        foreach (Renderer item in tableRenderers) item.enabled = visible;
+        foreach (Collider item in tableColliders) item.enabled = visible;
     }
 
-    private int CountConnectedPlayers()
+    private void HandleClientConnected(ulong clientId)
     {
-        return IsSpawned && NetworkManager.Singleton != null ? NetworkManager.Singleton.ConnectedClientsIds.Count : 1;
-    }
-
-    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void MarkCalibrationCompleteServerRpc()
-    {
-        calibratedPlayers.Value = Mathf.Min(CountConnectedPlayers(), calibratedPlayers.Value + 1);
-    }
-
-    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void SetTableLockedServerRpc(bool locked)
-    {
-        tableLocked.Value = locked;
-        if (!locked && !IsPlaced)
-        {
-            ConfirmCurrentPlacement();
-        }
-        if (locked)
-        {
-            activeGrabber.Value = NoGrabber;
-        }
-        ApplyLockState();
-    }
-
-    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void RequestTableGrabServerRpc(RpcParams rpcParams = default)
-    {
-        ulong sender = rpcParams.Receive.SenderClientId;
-        if (tableLocked.Value || (activeGrabber.Value != NoGrabber && activeGrabber.Value != sender))
+        if (!IsServer)
         {
             return;
         }
-
-        activeGrabber.Value = sender;
-    }
-
-    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void ReleaseTableGrabServerRpc(RpcParams rpcParams = default)
-    {
-        if (activeGrabber.Value == rpcParams.Receive.SenderClientId)
+        if (clientId != NetworkManager.LocalClientId)
         {
-            activeGrabber.Value = NoGrabber;
+            alignedClients.Remove(clientId);
         }
+        RecalculateAllPlayersAligned();
     }
 
-    [Rpc(SendTo.Server, Delivery = RpcDelivery.Unreliable, InvokePermission = RpcInvokePermission.Everyone)]
-    private void SubmitTablePoseServerRpc(Vector3 position, Quaternion rotation, RpcParams rpcParams = default)
+    private void HandleClientDisconnected(ulong clientId)
     {
-        if (IsTableLocked || tableRoot == null || activeGrabber.Value != rpcParams.Receive.SenderClientId)
+        if (!IsServer)
         {
             return;
         }
+        alignedClients.Remove(clientId);
+        RecalculateAllPlayersAligned();
+    }
 
-        tableRoot.SetPositionAndRotation(position, Quaternion.Euler(0f, rotation.eulerAngles.y, 0f));
-        networkPosition.Value = tableRoot.position;
-        networkRotation.Value = tableRoot.rotation;
+    private void RecalculateAllPlayersAligned()
+    {
+        if (!IsServer || NetworkManager == null)
+        {
+            return;
+        }
+        bool ready = IsPlaced && !sharedAnchorGroupId.Value.IsEmpty;
+        foreach (ulong clientId in NetworkManager.ConnectedClientsIds)
+        {
+            if (!alignedClients.Contains(clientId))
+            {
+                ready = false;
+                break;
+            }
+        }
+        allPlayersAligned.Value = ready;
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    private void AcknowledgeAlignmentServerRpc(int revision, RpcParams rpcParams = default)
+    {
+        if (revision != alignmentRevision.Value || sharedAnchorGroupId.Value.IsEmpty)
+        {
+            return;
+        }
+        alignedClients.Add(rpcParams.Receive.SenderClientId);
+        RecalculateAllPlayersAligned();
+        if (allPlayersAligned.Value)
+        {
+            ReportAlignmentStatus("Both headsets are aligned. Ready to start.");
+        }
+    }
+
+    private void HandleApplicationFocusChanged(bool hasFocus)
+    {
+        if (hasFocus && IsSpawned && !localCalibrationComplete)
+        {
+            RetrySharedAlignment();
+        }
     }
 }
