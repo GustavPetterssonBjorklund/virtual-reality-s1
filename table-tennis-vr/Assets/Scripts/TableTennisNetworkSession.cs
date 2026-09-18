@@ -15,6 +15,7 @@ using UnityTransport = Unity.Netcode.Transports.UTP.UnityTransport;
 public sealed class TableTennisNetworkSession : MonoBehaviour
 {
     [SerializeField] private GameObject racketPrefab;
+    [SerializeField] private Transform remoteRacketSpawnAnchor;
     [SerializeField] private int maxConnections = 1;
     [SerializeField] private string connectionType = "dtls";
 
@@ -224,8 +225,13 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
             return;
         }
 
-        Vector3 spawnPosition = transform.TransformPoint(new Vector3(-1f, 1.15f, 0.25f));
-        GameObject racket = Instantiate(racketPrefab, spawnPosition, transform.rotation);
+        Vector3 spawnPosition = remoteRacketSpawnAnchor != null
+            ? remoteRacketSpawnAnchor.position
+            : transform.TransformPoint(new Vector3(-1f, 1.15f, 0.25f));
+        Quaternion spawnRotation = remoteRacketSpawnAnchor != null
+            ? remoteRacketSpawnAnchor.rotation
+            : transform.rotation;
+        GameObject racket = Instantiate(racketPrefab, spawnPosition, spawnRotation);
         NetworkObject networkObject = racket.GetComponent<NetworkObject>();
         if (networkObject == null)
         {

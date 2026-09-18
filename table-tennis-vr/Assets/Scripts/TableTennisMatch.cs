@@ -6,6 +6,7 @@ public sealed class TableTennisMatch : NetworkBehaviour
     [SerializeField] private int pointsToWin = 11;
     [SerializeField] private int requiredLead = 2;
     [SerializeField] private float resetDelay = 0.25f;
+    [SerializeField] private Transform ballSpawnAnchor;
 
     private readonly NetworkVariable<int> playerOneScore = new();
     private readonly NetworkVariable<int> playerTwoScore = new();
@@ -22,7 +23,7 @@ public sealed class TableTennisMatch : NetworkBehaviour
     public int RequiredLead => requiredLead;
 
     private TableTennisBall ball;
-    private Vector3 servePosition;
+    private Vector3 fallbackServeLocalPosition;
     private int offlinePlayerOneScore;
     private int offlinePlayerTwoScore;
     private bool offlineIsGameOver;
@@ -36,7 +37,7 @@ public sealed class TableTennisMatch : NetworkBehaviour
         ball = FindFirstObjectByType<TableTennisBall>();
         if (ball != null)
         {
-            servePosition = ball.transform.position;
+            fallbackServeLocalPosition = transform.InverseTransformPoint(ball.transform.position);
         }
     }
 
@@ -250,6 +251,9 @@ public sealed class TableTennisMatch : NetworkBehaviour
     {
         if (ball != null)
         {
+            Vector3 servePosition = ballSpawnAnchor != null
+                ? ballSpawnAnchor.position
+                : transform.TransformPoint(fallbackServeLocalPosition);
             ball.ResetForServe(servePosition);
         }
     }
