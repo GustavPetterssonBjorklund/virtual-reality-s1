@@ -216,7 +216,7 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
             return;
         }
 
-        Vector3 spawnPosition = transform.TransformPoint(new Vector3(-1f, 1.15f, 0.25f));
+        Vector3 spawnPosition = transform.TransformPoint(new Vector3(1f, 1.15f, 0.25f));
         GameObject racket = Instantiate(racketPrefab, spawnPosition, transform.rotation);
         NetworkObject networkObject = racket.GetComponent<NetworkObject>();
         if (networkObject == null)
@@ -224,6 +224,25 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
             Destroy(racket);
             Debug.LogError("The racket prefab needs a NetworkObject component.");
             return;
+        }
+
+        // The scene racket has the configured trigger; it is not part of the prefab.
+        // Keep scoring on the host, where the rules manager and ball simulation run.
+        Transform playerRacket = transform.Find("Racket");
+        Transform triggerTemplate = playerRacket == null ? null : playerRacket.Find("P1 Racket Trigger");
+        if (triggerTemplate != null)
+        {
+            GameObject triggerObject = Instantiate(triggerTemplate.gameObject, racket.transform, false);
+            triggerObject.name = "P2 Racket Trigger";
+            BallEventTrigger trigger = triggerObject.GetComponent<BallEventTrigger>();
+            if (trigger != null)
+            {
+                trigger.eventType = TableTennisRules.BallEvent.P2Racket;
+            }
+        }
+        else
+        {
+            Debug.LogWarning("P2 racket could not copy the scene's P1 Racket Trigger.");
         }
 
         networkObject.SpawnWithOwnership(clientId);
