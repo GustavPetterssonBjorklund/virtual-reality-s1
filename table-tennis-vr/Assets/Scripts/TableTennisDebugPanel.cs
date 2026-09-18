@@ -18,6 +18,8 @@ public sealed class TableTennisDebugPanel : MonoBehaviour
     private Slider reactionSlider;
     private Slider missSlider;
     private float launchSpeed = 4.5f;
+    private float nextNetworkTelemetryRefresh;
+    private string networkTelemetry = string.Empty;
 
     private void Awake()
     {
@@ -52,14 +54,51 @@ public sealed class TableTennisDebugPanel : MonoBehaviour
             opponentToggle.SetIsOnWithoutNotify(false);
         }
 
+        if (connected && Time.unscaledTime >= nextNetworkTelemetryRefresh)
+        {
+            nextNetworkTelemetryRefresh = Time.unscaledTime + 0.25f;
+            networkTelemetry = BuildNetworkTelemetry();
+        }
+        else if (!connected)
+        {
+            networkTelemetry = string.Empty;
+        }
+
         modeText.text = connected ? "NETWORK SESSION — DEBUG MUTATIONS DISABLED" : "OFFLINE SOLO TEST MODE";
         telemetry.text = $"SCORE   {match.PlayerOneScore} - {match.PlayerTwoScore}\n" +
                          $"BALL    {ball.transform.position:F2}\n" +
                          $"SPEED   {ball.LinearVelocity.magnitude:F2} m/s\n" +
+                         networkTelemetry +
                          $"FPS     {(1f / Mathf.Max(Time.unscaledDeltaTime, 0.0001f)):F0}\n" +
                          $"AI      {(opponent.IsEnabled ? "ACTIVE" : "OFF")}\n" +
                          $"FROZEN  {(ball.IsFrozen ? "YES" : "NO")}\n" +
                          $"LEAD    first to {match.PointsToWin}, lead {match.RequiredLead}";
+    }
+
+    private string BuildNetworkTelemetry()
+    {
+        NetworkManager manager = NetworkManager.Singleton;
+        if (manager == null || !manager.IsListening)
+        {
+            return string.Empty;
+        }
+
+        ulong rtt = manager.NetworkConfig.NetworkTransport.GetCurrentRtt(NetworkManager.ServerClientId);
+        string role = manager.IsHost ? "HOST" : manager.IsServer ? "SERVER" : "CLIENT";
+        string result = $"NET     {role} tick {manager.NetworkConfig.TickRate} RTT {rtt} ms\n" +
+                        $"BALL    {(ball.IsPhysicsAuthority ? "AUTH" : "REPL")} " +
+                        $"{(ball.IsKinematic ? "KIN" : "DYN")}\n";
+
+        TableTennisNetworkRacket[] rackets = FindObjectsByType<TableTennisNetworkRacket>(FindObjectsSortMode.None);
+        for (int i = 0; i < rackets.Length; i++)
+        {
+            TableTennisNetworkRacket racket = rackets[i];
+            result += $"RKT {i + 1}   owner {racket.OwnerClientId} " +
+                      $"{(racket.IsPhysicsAuthority ? "AUTH" : "REPL")} " +
+                      $"{(racket.IsKinematic ? "KIN" : "DYN")}\n";
+        }
+
+        return result;
     }
 
     private void CreatePanel()
@@ -80,7 +119,7 @@ public sealed class TableTennisDebugPanel : MonoBehaviour
 
         CreateText(panel.transform, "DEBUG OPTIONS", 30f, new Vector2(0f, 292f), new Vector2(700f, 45f));
         modeText = CreateText(panel.transform, "OFFLINE SOLO TEST MODE", 18f, new Vector2(0f, 248f), new Vector2(700f, 35f));
-        telemetry = CreateText(panel.transform, "", 18f, new Vector2(-210f, 125f), new Vector2(300f, 210f));
+        telemetry = CreateText(panel.transform, "", 16f, new Vector2(-195f, 105f), new Vector2(360f, 290f));
         telemetry.alignment = TextAlignmentOptions.Left;
 
         opponentToggle = CreateToggle(panel.transform, "SOLO OPPONENT", new Vector2(175f, 205f), false, SetOpponentEnabled);

@@ -15,6 +15,7 @@ using UnityTransport = Unity.Netcode.Transports.UTP.UnityTransport;
 public sealed class TableTennisNetworkSession : MonoBehaviour
 {
     [SerializeField] private GameObject racketPrefab;
+    [SerializeField] private Transform remoteRacketSpawnAnchor;
     [SerializeField] private int maxConnections = 1;
     [SerializeField] private string connectionType = "dtls";
 
@@ -135,6 +136,20 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
         JoinSession(joinCodeInput == null ? string.Empty : joinCodeInput.text);
     }
 
+    public void ResetBall()
+    {
+        FindFirstObjectByType<TableTennisMatch>()?.DebugResetBall();
+    }
+
+    public void ResetRackets()
+    {
+        TableTennisNetworkRacket[] rackets = FindObjectsByType<TableTennisNetworkRacket>(FindObjectsSortMode.None);
+        foreach (TableTennisNetworkRacket racket in rackets)
+        {
+            racket.RequestResetToSpawn();
+        }
+    }
+
     public async void JoinSession(string joinCode)
     {
         if (isBusy || IsConnected || string.IsNullOrWhiteSpace(joinCode))
@@ -224,8 +239,13 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
             return;
         }
 
-        Vector3 spawnPosition = transform.TransformPoint(new Vector3(-1f, 1.15f, 0.25f));
-        GameObject racket = Instantiate(racketPrefab, spawnPosition, transform.rotation);
+        Vector3 spawnPosition = remoteRacketSpawnAnchor != null
+            ? remoteRacketSpawnAnchor.position
+            : transform.TransformPoint(new Vector3(-1f, 1.15f, 0.25f));
+        Quaternion spawnRotation = remoteRacketSpawnAnchor != null
+            ? remoteRacketSpawnAnchor.rotation
+            : transform.rotation;
+        GameObject racket = Instantiate(racketPrefab, spawnPosition, spawnRotation);
         NetworkObject networkObject = racket.GetComponent<NetworkObject>();
         if (networkObject == null)
         {
@@ -274,6 +294,12 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
         }
 
         Debug.Log($"[Network] {message}");
+    }
+
+    /// <summary>Lets the colocated alignment flow reuse the lobby status display.</summary>
+    public void ReportStatus(string message)
+    {
+        SetStatus(message);
     }
 
     private void AddJoinCodePointerClickListener()
