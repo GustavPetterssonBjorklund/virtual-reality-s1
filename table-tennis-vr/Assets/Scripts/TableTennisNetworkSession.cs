@@ -276,6 +276,12 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
         Debug.Log($"[Network] {message}");
     }
 
+    /// <summary>Lets the colocated alignment flow reuse the lobby status display.</summary>
+    public void ReportStatus(string message)
+    {
+        SetStatus(message);
+    }
+
     private void AddJoinCodePointerClickListener()
     {
         EventTrigger trigger = joinCodeInput.GetComponent<EventTrigger>();
