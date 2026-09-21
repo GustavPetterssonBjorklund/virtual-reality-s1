@@ -185,7 +185,11 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
                     normal = -normal;
                 }
 
-                Vector3 contactPoint = overlap.bounds.center - normal * 0.02f;
+                // Use the actual paddle face rather than the ball's current centre.
+                // TableTennisBall then places its centre just outside this face, preventing
+                // the same overlap from being treated as another hit a few frames later.
+                float halfThickness = paddleCollider.size.y * Mathf.Abs(transform.lossyScale.y) * 0.5f;
+                Vector3 contactPoint = center + normal * halfThickness;
                 ulong hitter = IsSpawned ? OwnerClientId : 0;
                 RacketHitSample hit = new(
                     hitter,

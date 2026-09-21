@@ -37,17 +37,22 @@ public sealed class TableTennisBall : NetworkBehaviour
     private const float AirDensity = 1.225f;
     private const float DragCoefficient = 0.47f;
     private const float CrossSectionArea = Mathf.PI * 0.02f * 0.02f;
+    private const float ReleaseRacketGracePeriod = 0.2f;
 
     [Header("Flight")]
-    [SerializeField] private float maxSpeed = 18f;
+    [SerializeField] private float maxSpeed = 7f;
     [SerializeField] private float magnusCoefficient = 0.003f;
     [SerializeField] private float maxMagnusAcceleration = 12f;
 
     [Header("Racket contact")]
-    [SerializeField] private float racketRestitution = 0.9f;
+    [SerializeField] private float racketRestitution = 0.6f;
     [SerializeField] private float tangentialCoupling = 0.2f;
     [SerializeField] private float spinTransfer = 0.035f;
-    [SerializeField] private float hitCooldown = 0.04f;
+    [SerializeField] private float hitCooldown = 0.06f;
+    [Tooltip("Maximum speed transferred from a moving racket at its contact surface.")]
+    [SerializeField] private float maxPaddleSurfaceSpeed = 4f;
+    [Tooltip("Maximum ball speed immediately after a racket hit.")]
+    [SerializeField] private float maxRacketHitSpeed = 6f;
 
     [Header("Authority")]
     [SerializeField] private float sideHandoffDeadZone = 0.05f;
@@ -61,6 +66,7 @@ public sealed class TableTennisBall : NetworkBehaviour
     private bool frozen;
     private bool grabRequestPending;
     private float lastHitTime = float.NegativeInfinity;
+    private float ignoreRacketHitsUntil;
     private uint lastHitSequence;
     private ulong lastHitHitterClientId = NoGrabber;
     private uint lastAuthoritySequence;
@@ -189,7 +195,7 @@ public sealed class TableTennisBall : NetworkBehaviour
 
     public bool TryApplyRacketHit(in RacketHitSample hit)
     {
-        if (!IsPhysicsAuthority || locallySelected || frozen ||
+        if (!IsPhysicsAuthority || locallySelected || frozen || Time.time < ignoreRacketHitsUntil ||
             Time.time - lastHitTime < hitCooldown ||
             (hit.Sequence != 0 && hit.Sequence == lastHitSequence &&
              hit.HitterClientId == lastHitHitterClientId))
@@ -204,7 +210,11 @@ public sealed class TableTennisBall : NetworkBehaviour
             normal = -normal;
         }
 
-        Vector3 surfaceVelocity = hit.PaddleVelocity + Vector3.Cross(hit.PaddleAngularVelocity, offset);
+        // Controller tracking can report a large one-frame displacement (for example
+        // after re-centering). Do not let that spike turn into ball velocity.
+        Vector3 surfaceVelocity = Vector3.ClampMagnitude(
+            hit.PaddleVelocity + Vector3.Cross(hit.PaddleAngularVelocity, offset),
+            maxPaddleSurfaceSpeed);
         Vector3 relativeVelocity = ballBody.linearVelocity - surfaceVelocity;
         float closingSpeed = Vector3.Dot(relativeVelocity, normal);
         if (closingSpeed >= 0.1f)
@@ -218,7 +228,9 @@ public sealed class TableTennisBall : NetworkBehaviour
             -normalVelocity * racketRestitution +
             tangentVelocity * (1f - tangentialCoupling);
 
-        ballBody.linearVelocity = Vector3.ClampMagnitude(surfaceVelocity + outgoingRelative, maxSpeed);
+        ballBody.linearVelocity = Vector3.ClampMagnitude(
+            surfaceVelocity + outgoingRelative,
+            Mathf.Min(maxSpeed, maxRacketHitSpeed));
         Vector3 spinAxis = Vector3.Cross(normal, -tangentVelocity);
         ballBody.angularVelocity = Vector3.ClampMagnitude(
             ballBody.angularVelocity + hit.PaddleAngularVelocity * 0.25f + spinAxis * spinTransfer,
@@ -349,6 +361,16 @@ public sealed class TableTennisBall : NetworkBehaviour
     private void HandleSelectExited(SelectExitEventArgs _)
     {
         locallySelected = false;
+        // Instantaneous XR movement can leave the Rigidbody at the pose where it
+        // was picked up. Synchronize it before physics resumes so release starts
+        // exactly where the controller let go.
+        ballBody.position = transform.position;
+        ballBody.rotation = transform.rotation;
+        Physics.SyncTransforms();
+        // XR Interaction Toolkit supplies the release velocity once. After that,
+        // Rigidbody gravity controls the drop. Ignore the still-nearby racket so
+        // it cannot turn the release into an immediate artificial hit.
+        ignoreRacketHitsUntil = Time.time + ReleaseRacketGracePeriod;
         if (IsSpawned)
         {
             StartCoroutine(ClearGrabberAfterDetach());
