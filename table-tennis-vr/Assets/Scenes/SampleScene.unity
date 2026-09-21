@@ -5592,15 +5592,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TableTennisBall
   ShowTopMostFoldoutHeaderGroup: 1
-  maxSpeed: 7
-  magnusCoefficient: 0.003
-  maxMagnusAcceleration: 12
-  racketRestitution: 0.6
+  maxSpeed: 4
+  magnusCoefficient: 0
+  maxMagnusAcceleration: 0
+  racketRestitution: 0.35
   tangentialCoupling: 0.2
   spinTransfer: 0.035
   hitCooldown: 0.06
-  maxPaddleSurfaceSpeed: 4
-  maxRacketHitSpeed: 6
+  maxPaddleSurfaceSpeed: 1.5
+  maxRacketHitSpeed: 3
   sideHandoffDeadZone: 0.05
 --- !u!114 &1183940103
 MonoBehaviour:

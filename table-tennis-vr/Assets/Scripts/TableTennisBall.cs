@@ -40,19 +40,19 @@ public sealed class TableTennisBall : NetworkBehaviour
     private const float ReleaseRacketGracePeriod = 0.2f;
 
     [Header("Flight")]
-    [SerializeField] private float maxSpeed = 7f;
-    [SerializeField] private float magnusCoefficient = 0.003f;
-    [SerializeField] private float maxMagnusAcceleration = 12f;
+    [SerializeField] private float maxSpeed = 4f;
+    [SerializeField] private float magnusCoefficient = 0f;
+    [SerializeField] private float maxMagnusAcceleration = 0f;
 
     [Header("Racket contact")]
-    [SerializeField] private float racketRestitution = 0.6f;
+    [SerializeField] private float racketRestitution = 0.35f;
     [SerializeField] private float tangentialCoupling = 0.2f;
     [SerializeField] private float spinTransfer = 0.035f;
     [SerializeField] private float hitCooldown = 0.06f;
     [Tooltip("Maximum speed transferred from a moving racket at its contact surface.")]
-    [SerializeField] private float maxPaddleSurfaceSpeed = 4f;
+    [SerializeField] private float maxPaddleSurfaceSpeed = 1.5f;
     [Tooltip("Maximum ball speed immediately after a racket hit.")]
-    [SerializeField] private float maxRacketHitSpeed = 6f;
+    [SerializeField] private float maxRacketHitSpeed = 3f;
 
     [Header("Authority")]
     [SerializeField] private float sideHandoffDeadZone = 0.05f;
