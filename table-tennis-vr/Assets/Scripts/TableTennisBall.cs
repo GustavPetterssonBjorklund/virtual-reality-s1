@@ -195,7 +195,15 @@ public sealed class TableTennisBall : NetworkBehaviour
 
     public bool TryApplyRacketHit(in RacketHitSample hit)
     {
-        if (!IsPhysicsAuthority || locallySelected || frozen || Time.time < ignoreRacketHitsUntil ||
+        Vector3 surfaceVelocity = hit.PaddleVelocity + Vector3.Cross(
+            hit.PaddleAngularVelocity,
+            ballBody.worldCenterOfMass - hit.ContactPoint);
+        return TryApplyRacketHit(hit, ballBody.linearVelocity - surfaceVelocity);
+    }
+
+    public bool TryApplyRacketHit(in RacketHitSample hit, Vector3 incomingRelativeVelocity)
+    {
+        if (locallySelected || frozen || Time.time < ignoreRacketHitsUntil ||
             Time.time - lastHitTime < hitCooldown ||
             (hit.Sequence != 0 && hit.Sequence == lastHitSequence &&
              hit.HitterClientId == lastHitHitterClientId))
@@ -215,7 +223,7 @@ public sealed class TableTennisBall : NetworkBehaviour
         Vector3 surfaceVelocity = Vector3.ClampMagnitude(
             hit.PaddleVelocity + Vector3.Cross(hit.PaddleAngularVelocity, offset),
             maxPaddleSurfaceSpeed);
-        Vector3 relativeVelocity = ballBody.linearVelocity - surfaceVelocity;
+        Vector3 relativeVelocity = incomingRelativeVelocity;
         float closingSpeed = Vector3.Dot(relativeVelocity, normal);
         if (closingSpeed >= 0.1f)
         {

@@ -6,11 +6,6 @@ using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
 public sealed class TableTennisNetworkRacket : NetworkBehaviour
 {
-    private const float MaxSweepStep = 0.01f;
-    private const float MaxSweepAngle = 5f;
-    private const int MaxSweepSubsteps = 16;
-    private const float BallContactPadding = 0.05f;
-
     private XRGrabInteractable grabInteractable;
     private Rigidbody body;
     private Collider[] racketColliders;
@@ -25,7 +20,7 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
     private Quaternion spawnWorldRotation;
     private bool hasSpawnPose;
     private bool hasPreviousPhysicsPose;
-    private bool ballCollisionsIgnored;
+    private bool nativeBallCollisionsEnabled;
     private Vector3 previousPhysicsPosition;
     private Quaternion previousPhysicsRotation;
     private Vector3 paddleVelocity;
@@ -41,7 +36,9 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
         body = GetComponent<Rigidbody>();
         racketColliders = GetComponentsInChildren<Collider>(true);
         body.useGravity = true;
-        body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+        // XR drives a grabbed racket as a kinematic Rigidbody. Speculative CCD is
+        // Unity's continuous mode that supports kinematic bodies and angular motion.
+        body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
         body.interpolation = RigidbodyInterpolation.Interpolate;
 
         foreach (Collider racketCollider in racketColliders)
@@ -106,7 +103,7 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
 
     private void FixedUpdate()
     {
-        EnsureNativeBallCollisionsIgnored();
+        EnsureNativeBallCollisionsEnabled();
 
         if (!IsPhysicsAuthority || paddleCollider == null)
         {
@@ -124,89 +121,14 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
             return;
         }
 
-        SweepForBall(
-            previousPhysicsPosition,
+        float fixedDelta = Mathf.Max(Time.fixedDeltaTime, 0.001f);
+        paddleVelocity = (currentPosition - previousPhysicsPosition) / fixedDelta;
+        paddleAngularVelocity = CalculateAngularVelocity(
             previousPhysicsRotation,
-            currentPosition,
-            currentRotation);
+            currentRotation,
+            fixedDelta);
         previousPhysicsPosition = currentPosition;
         previousPhysicsRotation = currentRotation;
-    }
-
-    private void SweepForBall(
-        Vector3 fromPosition,
-        Quaternion fromRotation,
-        Vector3 toPosition,
-        Quaternion toRotation)
-    {
-        float distance = Vector3.Distance(fromPosition, toPosition);
-        float angle = Quaternion.Angle(fromRotation, toRotation);
-        int substeps = Mathf.Clamp(
-            Mathf.Max(
-                Mathf.CeilToInt(distance / MaxSweepStep),
-                Mathf.CeilToInt(angle / MaxSweepAngle)),
-            1,
-            MaxSweepSubsteps);
-
-        float fixedDelta = Mathf.Max(Time.fixedDeltaTime, 0.001f);
-        paddleVelocity = (toPosition - fromPosition) / fixedDelta;
-        paddleAngularVelocity = CalculateAngularVelocity(
-            fromRotation, toRotation, fixedDelta);
-        Vector3 halfExtents = Vector3.Scale(
-            paddleCollider.size * 0.5f,
-            Abs(transform.lossyScale)) + Vector3.one * BallContactPadding;
-
-        for (int step = 1; step <= substeps; step++)
-        {
-            float t = step / (float)substeps;
-            Vector3 posePosition = Vector3.Lerp(fromPosition, toPosition, t);
-            Quaternion poseRotation = Quaternion.Slerp(fromRotation, toRotation, t);
-            Vector3 center = posePosition + poseRotation * Vector3.Scale(
-                paddleCollider.center,
-                transform.lossyScale);
-
-            Collider[] overlaps = Physics.OverlapBox(
-                center,
-                halfExtents,
-                poseRotation,
-                ~0,
-                QueryTriggerInteraction.Ignore);
-
-            foreach (Collider overlap in overlaps)
-            {
-                TableTennisBall ball = overlap.GetComponentInParent<TableTennisBall>();
-                if (ball == null || !ball.IsPhysicsAuthority)
-                {
-                    continue;
-                }
-
-                SetNativeBallCollision(overlap, true);
-                Vector3 normal = poseRotation * Vector3.up;
-                Vector3 ballOffset = overlap.bounds.center - center;
-                if (Vector3.Dot(normal, ballOffset) < 0f)
-                {
-                    normal = -normal;
-                }
-
-                // Use the actual paddle face rather than the ball's current centre.
-                // TableTennisBall then places its centre just outside this face, preventing
-                // the same overlap from being treated as another hit a few frames later.
-                float halfThickness = paddleCollider.size.y * Mathf.Abs(transform.lossyScale.y) * 0.5f;
-                Vector3 contactPoint = center + normal * halfThickness;
-                ulong hitter = IsSpawned ? OwnerClientId : 0;
-                RacketHitSample hit = new(
-                    hitter,
-                    contactPoint,
-                    normal,
-                    paddleVelocity,
-                    paddleAngularVelocity,
-                    ++hitSequence);
-                if (ball.TryApplyRacketHit(hit))
-                {
-                    return;
-                }
-            }
-        }
     }
 
     private void SetNativeBallCollision(Collider ballCollider, bool ignored)
@@ -220,9 +142,9 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
         }
     }
 
-    private void EnsureNativeBallCollisionsIgnored()
+    private void EnsureNativeBallCollisionsEnabled()
     {
-        if (ballCollisionsIgnored)
+        if (nativeBallCollisionsEnabled)
         {
             return;
         }
@@ -237,11 +159,51 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
         {
             foreach (Collider ballCollider in ball.GetComponentsInChildren<Collider>(true))
             {
-                SetNativeBallCollision(ballCollider, true);
+                SetNativeBallCollision(ballCollider, false);
             }
         }
 
-        ballCollisionsIgnored = true;
+        nativeBallCollisionsEnabled = true;
+    }
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (collision.contactCount == 0)
+        {
+            return;
+        }
+
+        TableTennisBall ball = collision.collider.GetComponentInParent<TableTennisBall>();
+        if (ball == null)
+        {
+            return;
+        }
+
+        ContactPoint contact = collision.GetContact(0);
+        Vector3 normal = ball.transform.position - contact.point;
+        if (normal.sqrMagnitude < 0.0001f)
+        {
+            normal = transform.up;
+        }
+        normal.Normalize();
+
+        // Collision.relativeVelocity is sampled at contact, before a scripted
+        // rebound is applied. Orient it so negative means the ball is closing.
+        Vector3 incomingRelativeVelocity = collision.relativeVelocity;
+        if (Vector3.Dot(incomingRelativeVelocity, normal) > 0f)
+        {
+            incomingRelativeVelocity = -incomingRelativeVelocity;
+        }
+
+        ulong hitter = IsSpawned ? OwnerClientId : 0;
+        ball.TryApplyRacketHit(new RacketHitSample(
+            hitter,
+            contact.point,
+            normal,
+            paddleVelocity,
+            paddleAngularVelocity,
+            ++hitSequence),
+            incomingRelativeVelocity);
     }
 
     private static Vector3 CalculateAngularVelocity(
@@ -265,11 +227,6 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
         }
 
         return axis.normalized * (angleDegrees * Mathf.Deg2Rad / deltaTime);
-    }
-
-    private static Vector3 Abs(Vector3 value)
-    {
-        return new Vector3(Mathf.Abs(value.x), Mathf.Abs(value.y), Mathf.Abs(value.z));
     }
 
     private void ApplyInteractionAuthority()
