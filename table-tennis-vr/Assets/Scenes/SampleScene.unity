@@ -5482,7 +5482,7 @@ Rigidbody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1183940096}
   serializedVersion: 5
-  m_Mass: 0.0027
+  m_Mass: 0.002
   m_LinearDamping: 0
   m_AngularDamping: 0.05
   m_CenterOfMass: {x: 0, y: 0, z: 0}
@@ -5592,16 +5592,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TableTennisBall
   ShowTopMostFoldoutHeaderGroup: 1
-  maxSpeed: 4
-  magnusCoefficient: 0
-  maxMagnusAcceleration: 0
-  racketRestitution: 0.35
-  tangentialCoupling: 0.2
-  spinTransfer: 0.035
-  hitCooldown: 0.06
-  maxPaddleSurfaceSpeed: 1.5
-  maxRacketHitSpeed: 3
-  sideHandoffDeadZone: 0.05
+  maxSpeed: 18
 --- !u!114 &1183940103
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5684,7 +5675,7 @@ MonoBehaviour:
   m_SnapToColliderVolume: 1
   m_ReinitializeDynamicAttachEverySingleGrab: 1
   m_AttachEaseInTime: 0.15
-  m_MovementType: 1
+  m_MovementType: 2
   m_PredictedVisualsTransform: {fileID: 0}
   m_VelocityDamping: 1
   m_VelocityScale: 1
@@ -5719,7 +5710,7 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  m_ThrowVelocityScale: 1
+  m_ThrowVelocityScale: 1.5
   m_ThrowAngularVelocityScale: 1
   m_ForceGravityOnDetach: 0
   m_UnparentTransformOnGrab: 0
@@ -7981,9 +7972,9 @@ PhysicsMaterial:
   m_PrefabAsset: {fileID: 0}
   m_Name: ' (Instance)'
   serializedVersion: 2
-  m_DynamicFriction: 0.2
-  m_StaticFriction: 0.2
-  m_Bounciness: 0.88
+  m_DynamicFriction: 0.6
+  m_StaticFriction: 0.6
+  m_Bounciness: 0.704
   m_FrictionCombine: 0
   m_BounceCombine: 3
 --- !u!1001 &1825945902
@@ -9260,11 +9251,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 408047500363620289, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
       propertyPath: m_CollisionDetection
-      value: 3
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: 681146157184554525, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
       propertyPath: m_MovementType
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5617678960556187694, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
       propertyPath: m_Name

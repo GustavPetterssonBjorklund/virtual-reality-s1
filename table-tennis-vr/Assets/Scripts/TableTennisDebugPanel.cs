@@ -89,7 +89,7 @@ public sealed class TableTennisDebugPanel : MonoBehaviour
         string result = $"NET     {role} tick {manager.NetworkConfig.TickRate} RTT {rtt} ms\n" +
                         $"BALL    {(ball.IsPhysicsAuthority ? "AUTH" : "REPL")} " +
                         $"{(ball.IsKinematic ? "KIN" : "DYN")} " +
-                        $"hit {ball.LastHitSequence} handoff {ball.LastAuthoritySequence}\n";
+                        $"handoff {ball.LastAuthoritySequence}\n";
 
         TableTennisNetworkRacket[] rackets = FindObjectsByType<TableTennisNetworkRacket>(FindObjectsSortMode.None);
         for (int i = 0; i < rackets.Length; i++)

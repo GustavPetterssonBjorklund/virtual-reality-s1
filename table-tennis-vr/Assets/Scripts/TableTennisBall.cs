@@ -5,56 +5,11 @@ using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Filtering;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
-public readonly struct RacketHitSample
-{
-    public readonly ulong HitterClientId;
-    public readonly Vector3 ContactPoint;
-    public readonly Vector3 Normal;
-    public readonly Vector3 PaddleVelocity;
-    public readonly Vector3 PaddleAngularVelocity;
-    public readonly uint Sequence;
-
-    public RacketHitSample(
-        ulong hitterClientId,
-        Vector3 contactPoint,
-        Vector3 normal,
-        Vector3 paddleVelocity,
-        Vector3 paddleAngularVelocity,
-        uint sequence)
-    {
-        HitterClientId = hitterClientId;
-        ContactPoint = contactPoint;
-        Normal = normal;
-        PaddleVelocity = paddleVelocity;
-        PaddleAngularVelocity = paddleAngularVelocity;
-        Sequence = sequence;
-    }
-}
-
 public sealed class TableTennisBall : NetworkBehaviour
 {
     private const ulong NoGrabber = ulong.MaxValue;
-    private const float AirDensity = 1.225f;
-    private const float DragCoefficient = 0.47f;
-    private const float CrossSectionArea = Mathf.PI * 0.02f * 0.02f;
-    private const float ReleaseRacketGracePeriod = 0.2f;
 
-    [Header("Flight")]
-    [SerializeField] private float maxSpeed = 4f;
-    [SerializeField] private float magnusCoefficient = 0f;
-    [SerializeField] private float maxMagnusAcceleration = 0f;
-
-    [Header("Racket contact")]
-    [SerializeField] private float racketRestitution = 0.35f;
-    [SerializeField] private float tangentialCoupling = 0.2f;
-    [SerializeField] private float spinTransfer = 0.035f;
-    [SerializeField] private float hitCooldown = 0.06f;
-    [Tooltip("Maximum speed transferred from a moving racket at its contact surface.")]
-    [SerializeField] private float maxPaddleSurfaceSpeed = 1.5f;
-    [Tooltip("Maximum ball speed immediately after a racket hit.")]
-    [SerializeField] private float maxRacketHitSpeed = 3f;
-
-    [Header("Authority")]
+    [SerializeField] private float maxSpeed = 18f;
     [SerializeField] private float sideHandoffDeadZone = 0.05f;
 
     private readonly NetworkVariable<ulong> activeGrabber = new(NoGrabber);
@@ -65,10 +20,6 @@ public sealed class TableTennisBall : NetworkBehaviour
     private bool locallySelected;
     private bool frozen;
     private bool grabRequestPending;
-    private float lastHitTime = float.NegativeInfinity;
-    private float ignoreRacketHitsUntil;
-    private uint lastHitSequence;
-    private ulong lastHitHitterClientId = NoGrabber;
     private uint lastAuthoritySequence;
 
     public Vector3 LinearVelocity => ballBody == null ? Vector3.zero : ballBody.linearVelocity;
@@ -77,15 +28,12 @@ public sealed class TableTennisBall : NetworkBehaviour
     public bool IsPhysicsAuthority => !IsSpawned || IsOwner;
     public bool IsKinematic => ballBody != null && ballBody.isKinematic;
     public ulong ActiveGrabber => activeGrabber.Value;
-    public uint LastHitSequence => lastHitSequence;
     public uint LastAuthoritySequence => lastAuthoritySequence;
 
     private void Awake()
     {
         ballBody = GetComponent<Rigidbody>();
         grabInteractable = GetComponent<XRGrabInteractable>();
-        ballBody.mass = 0.0027f;
-        ballBody.maxAngularVelocity = 300f;
         ballBody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         ballBody.interpolation = RigidbodyInterpolation.Interpolate;
         ballBody.solverIterations = 10;
@@ -186,76 +134,10 @@ public sealed class TableTennisBall : NetworkBehaviour
 
         if (!locallySelected)
         {
-            ApplyAirForces();
             TryHandoffAcrossNet();
         }
 
         ballBody.linearVelocity = Vector3.ClampMagnitude(ballBody.linearVelocity, maxSpeed);
-    }
-
-    public bool TryApplyRacketHit(in RacketHitSample hit)
-    {
-        Vector3 surfaceVelocity = hit.PaddleVelocity + Vector3.Cross(
-            hit.PaddleAngularVelocity,
-            ballBody.worldCenterOfMass - hit.ContactPoint);
-        return TryApplyRacketHit(hit, ballBody.linearVelocity - surfaceVelocity);
-    }
-
-    public bool TryApplyRacketHit(in RacketHitSample hit, Vector3 incomingRelativeVelocity)
-    {
-        if (locallySelected || frozen || Time.time < ignoreRacketHitsUntil ||
-            Time.time - lastHitTime < hitCooldown ||
-            (hit.Sequence != 0 && hit.Sequence == lastHitSequence &&
-             hit.HitterClientId == lastHitHitterClientId))
-        {
-            return false;
-        }
-
-        Vector3 normal = hit.Normal.sqrMagnitude > 0.5f ? hit.Normal.normalized : Vector3.up;
-        Vector3 offset = ballBody.worldCenterOfMass - hit.ContactPoint;
-        if (Vector3.Dot(offset, normal) < 0f)
-        {
-            normal = -normal;
-        }
-
-        // Controller tracking can report a large one-frame displacement (for example
-        // after re-centering). Do not let that spike turn into ball velocity.
-        Vector3 surfaceVelocity = Vector3.ClampMagnitude(
-            hit.PaddleVelocity + Vector3.Cross(hit.PaddleAngularVelocity, offset),
-            maxPaddleSurfaceSpeed);
-        Vector3 relativeVelocity = incomingRelativeVelocity;
-        float closingSpeed = Vector3.Dot(relativeVelocity, normal);
-        if (closingSpeed >= 0.1f)
-        {
-            return false;
-        }
-
-        Vector3 normalVelocity = Vector3.Dot(relativeVelocity, normal) * normal;
-        Vector3 tangentVelocity = relativeVelocity - normalVelocity;
-        Vector3 outgoingRelative =
-            -normalVelocity * racketRestitution +
-            tangentVelocity * (1f - tangentialCoupling);
-
-        ballBody.linearVelocity = Vector3.ClampMagnitude(
-            surfaceVelocity + outgoingRelative,
-            Mathf.Min(maxSpeed, maxRacketHitSpeed));
-        Vector3 spinAxis = Vector3.Cross(normal, -tangentVelocity);
-        ballBody.angularVelocity = Vector3.ClampMagnitude(
-            ballBody.angularVelocity + hit.PaddleAngularVelocity * 0.25f + spinAxis * spinTransfer,
-            ballBody.maxAngularVelocity);
-
-        ballBody.position = hit.ContactPoint + normal * 0.021f;
-        lastHitTime = Time.time;
-        lastHitSequence = hit.Sequence;
-        lastHitHitterClientId = hit.HitterClientId;
-
-        if (IsSpawned)
-        {
-            ulong receiver = GetOpponentClientId(hit.HitterClientId);
-            RequestAuthorityHandoff(receiver);
-        }
-
-        return true;
     }
 
     public void ResetForServe(Vector3 position)
@@ -369,16 +251,11 @@ public sealed class TableTennisBall : NetworkBehaviour
     private void HandleSelectExited(SelectExitEventArgs _)
     {
         locallySelected = false;
-        // Instantaneous XR movement can leave the Rigidbody at the pose where it
-        // was picked up. Synchronize it before physics resumes so release starts
-        // exactly where the controller let go.
+        // Synchronize the Rigidbody before physics resumes so release starts at
+        // the controller pose and keeps the throw velocity XRI applies afterward.
         ballBody.position = transform.position;
         ballBody.rotation = transform.rotation;
         Physics.SyncTransforms();
-        // XR Interaction Toolkit supplies the release velocity once. After that,
-        // Rigidbody gravity controls the drop. Ignore the still-nearby racket so
-        // it cannot turn the release into an immediate artificial hit.
-        ignoreRacketHitsUntil = Time.time + ReleaseRacketGracePeriod;
         if (IsSpawned)
         {
             StartCoroutine(ClearGrabberAfterDetach());
@@ -488,24 +365,9 @@ public sealed class TableTennisBall : NetworkBehaviour
         if (IsServer && activeGrabber.Value == clientId)
         {
             // Retain ownership after release. The releasing peer remains the
-            // physics writer until the ball crosses the net or is struck.
+            // physics writer until the ball crosses the net.
             activeGrabber.Value = NoGrabber;
         }
-    }
-
-    private void ApplyAirForces()
-    {
-        Vector3 velocity = ballBody.linearVelocity;
-        float speed = velocity.magnitude;
-        if (speed > 0.01f)
-        {
-            float dragScale =
-                0.5f * AirDensity * DragCoefficient * CrossSectionArea / ballBody.mass;
-            ballBody.AddForce(-dragScale * speed * velocity, ForceMode.Acceleration);
-        }
-
-        Vector3 magnus = Vector3.Cross(ballBody.angularVelocity, velocity) * magnusCoefficient;
-        ballBody.AddForce(Vector3.ClampMagnitude(magnus, maxMagnusAcceleration), ForceMode.Acceleration);
     }
 
     private void TryHandoffAcrossNet()
@@ -537,16 +399,6 @@ public sealed class TableTennisBall : NetworkBehaviour
         {
             RequestAuthorityHandoff(desiredOwner);
         }
-    }
-
-    private ulong GetOpponentClientId(ulong hitter)
-    {
-        if (hitter == NetworkManager.ServerClientId)
-        {
-            return GetFirstRemoteClientId();
-        }
-
-        return NetworkManager.ServerClientId;
     }
 
     private ulong GetFirstRemoteClientId()
