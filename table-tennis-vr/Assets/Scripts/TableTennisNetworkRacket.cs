@@ -6,9 +6,10 @@ using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
 public sealed class TableTennisNetworkRacket : NetworkBehaviour
 {
-    private const float MaxSweepStep = 0.02f;
+    private const float MaxSweepStep = 0.01f;
     private const float MaxSweepAngle = 5f;
-    private const int MaxSweepSubsteps = 8;
+    private const int MaxSweepSubsteps = 16;
+    private const float BallContactPadding = 0.05f;
 
     private XRGrabInteractable grabInteractable;
     private Rigidbody body;
@@ -27,6 +28,8 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
     private bool ballCollisionsIgnored;
     private Vector3 previousPhysicsPosition;
     private Quaternion previousPhysicsRotation;
+    private Vector3 paddleVelocity;
+    private Vector3 paddleAngularVelocity;
     private uint hitSequence;
 
     public bool IsPhysicsAuthority => !IsSpawned || IsOwner;
@@ -146,12 +149,12 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
             MaxSweepSubsteps);
 
         float fixedDelta = Mathf.Max(Time.fixedDeltaTime, 0.001f);
-        Vector3 paddleVelocity = (toPosition - fromPosition) / fixedDelta;
-        Vector3 paddleAngularVelocity = CalculateAngularVelocity(
+        paddleVelocity = (toPosition - fromPosition) / fixedDelta;
+        paddleAngularVelocity = CalculateAngularVelocity(
             fromRotation, toRotation, fixedDelta);
         Vector3 halfExtents = Vector3.Scale(
             paddleCollider.size * 0.5f,
-            Abs(transform.lossyScale));
+            Abs(transform.lossyScale)) + Vector3.one * BallContactPadding;
 
         for (int step = 1; step <= substeps; step++)
         {
@@ -177,7 +180,7 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
                     continue;
                 }
 
-                IgnoreNativeBallCollision(overlap);
+                SetNativeBallCollision(overlap, true);
                 Vector3 normal = poseRotation * Vector3.up;
                 Vector3 ballOffset = overlap.bounds.center - center;
                 if (Vector3.Dot(normal, ballOffset) < 0f)
@@ -206,13 +209,13 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
         }
     }
 
-    private void IgnoreNativeBallCollision(Collider ballCollider)
+    private void SetNativeBallCollision(Collider ballCollider, bool ignored)
     {
         foreach (Collider racketCollider in racketColliders)
         {
             if (racketCollider != null && ballCollider != null)
             {
-                Physics.IgnoreCollision(racketCollider, ballCollider, true);
+                Physics.IgnoreCollision(racketCollider, ballCollider, ignored);
             }
         }
     }
@@ -234,7 +237,7 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
         {
             foreach (Collider ballCollider in ball.GetComponentsInChildren<Collider>(true))
             {
-                IgnoreNativeBallCollision(ballCollider);
+                SetNativeBallCollision(ballCollider, true);
             }
         }
 
