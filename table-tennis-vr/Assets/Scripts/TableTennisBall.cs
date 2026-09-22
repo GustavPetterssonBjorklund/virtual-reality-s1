@@ -10,6 +10,7 @@ public sealed class TableTennisBall : NetworkBehaviour
     private const ulong NoGrabber = ulong.MaxValue;
 
     [SerializeField] private float maxSpeed = 18f;
+    [SerializeField] private Transform handoffCenter;
     [SerializeField] private float sideHandoffDeadZone = 0.05f;
 
     private readonly NetworkVariable<ulong> activeGrabber = new(NoGrabber);
@@ -20,6 +21,14 @@ public sealed class TableTennisBall : NetworkBehaviour
     private bool locallySelected;
     private bool frozen;
     private bool grabRequestPending;
+    private bool authorityHandoffPending;
+    private bool handoffSampleValid;
+    private Vector3 previousHandoffPosition;
+    private Quaternion previousHandoffRotation;
+    private Vector3 previousHandoffVelocity;
+    private Vector3 previousHandoffAngularVelocity;
+    private float previousHandoffDistance;
+    private double previousHandoffServerTime;
     private uint lastAuthoritySequence;
 
     public Vector3 LinearVelocity => ballBody == null ? Vector3.zero : ballBody.linearVelocity;
@@ -63,18 +72,21 @@ public sealed class TableTennisBall : NetworkBehaviour
         }
 
         grabRequestPending = false;
+        ResetHandoffTracking();
         ApplyInteractionAuthority();
     }
 
     public override void OnGainedOwnership()
     {
         grabRequestPending = false;
+        ResetHandoffTracking();
         ApplyInteractionAuthority();
     }
 
     public override void OnLostOwnership()
     {
         grabRequestPending = false;
+        ResetHandoffTracking();
         if (locallySelected && grabInteractable != null)
         {
             grabInteractable.interactionManager?.CancelInteractableSelection(
@@ -95,6 +107,7 @@ public sealed class TableTennisBall : NetworkBehaviour
 
         locallySelected = false;
         grabRequestPending = false;
+        ResetHandoffTracking();
         ApplyInteractionAuthority();
     }
 
@@ -132,12 +145,16 @@ public sealed class TableTennisBall : NetworkBehaviour
             return;
         }
 
-        if (!locallySelected)
+        ballBody.linearVelocity = Vector3.ClampMagnitude(ballBody.linearVelocity, maxSpeed);
+
+        if (locallySelected)
+        {
+            handoffSampleValid = false;
+        }
+        else
         {
             TryHandoffAcrossNet();
         }
-
-        ballBody.linearVelocity = Vector3.ClampMagnitude(ballBody.linearVelocity, maxSpeed);
     }
 
     public void ResetForServe(Vector3 position)
@@ -149,6 +166,7 @@ public sealed class TableTennisBall : NetworkBehaviour
 
         frozen = false;
         activeGrabber.Value = NoGrabber;
+        ResetHandoffTracking();
         if (IsSpawned && NetworkObject.OwnerClientId != NetworkManager.ServerClientId)
         {
             NetworkObject.RemoveOwnership();
@@ -233,6 +251,7 @@ public sealed class TableTennisBall : NetworkBehaviour
     {
         locallySelected = true;
         grabRequestPending = false;
+        ResetHandoffTracking();
         if (!IsSpawned || NetworkManager == null)
         {
             return;
@@ -251,6 +270,7 @@ public sealed class TableTennisBall : NetworkBehaviour
     private void HandleSelectExited(SelectExitEventArgs _)
     {
         locallySelected = false;
+        ResetHandoffTracking();
         // Synchronize the Rigidbody before physics resumes so release starts at
         // the controller pose and keeps the throw velocity XRI applies afterward.
         ballBody.position = transform.position;
@@ -372,7 +392,10 @@ public sealed class TableTennisBall : NetworkBehaviour
 
     private void TryHandoffAcrossNet()
     {
-        if (!IsSpawned || activeGrabber.Value != NoGrabber)
+        bool releasedByLocalOwner = NetworkManager != null &&
+            activeGrabber.Value == NetworkManager.LocalClientId && !locallySelected;
+        if (!IsSpawned || authorityHandoffPending ||
+            (activeGrabber.Value != NoGrabber && !releasedByLocalOwner))
         {
             return;
         }
@@ -382,23 +405,97 @@ public sealed class TableTennisBall : NetworkBehaviour
             tablePlacement = FindFirstObjectByType<TableTennisMRPlacement>();
         }
 
-        Transform tableRoot = tablePlacement == null ? null : tablePlacement.TableRoot;
-        if (tableRoot == null)
+        Transform reference = handoffCenter != null
+            ? handoffCenter
+            : tablePlacement == null ? null : tablePlacement.TableRoot;
+        if (reference == null)
         {
             return;
         }
 
-        float localX = tableRoot.InverseTransformPoint(ballBody.position).x;
-        if (Mathf.Abs(localX) <= sideHandoffDeadZone)
+        double serverTime = NetworkManager.ServerTime.Time;
+        Vector3 position = ballBody.position;
+        Quaternion rotation = ballBody.rotation;
+        Vector3 velocity = ballBody.linearVelocity;
+        Vector3 angularVelocity = ballBody.angularVelocity;
+        float signedDistance = Vector3.Dot(position - reference.position, reference.right);
+
+        if (!handoffSampleValid)
         {
+            CacheHandoffSample(
+                position, rotation, velocity, angularVelocity, signedDistance, serverTime);
+
+            ulong initialOwner = GetOwnerForDistance(signedDistance);
+            if (initialOwner != NetworkObject.OwnerClientId)
+            {
+                RequestAuthorityHandoff(
+                    initialOwner, position, rotation, velocity, angularVelocity, serverTime);
+            }
             return;
         }
 
-        ulong desiredOwner = localX > 0f ? NetworkManager.ServerClientId : GetFirstRemoteClientId();
+        ulong desiredOwner = GetOwnerForDistance(signedDistance);
         if (desiredOwner != NetworkObject.OwnerClientId)
         {
-            RequestAuthorityHandoff(desiredOwner);
+            float boundary = signedDistance > 0f
+                ? sideHandoffDeadZone
+                : -sideHandoffDeadZone;
+            float distanceDelta = signedDistance - previousHandoffDistance;
+            float crossingFraction = Mathf.Approximately(distanceDelta, 0f)
+                ? 1f
+                : Mathf.Clamp01((boundary - previousHandoffDistance) / distanceDelta);
+
+            RequestAuthorityHandoff(
+                desiredOwner,
+                Vector3.Lerp(previousHandoffPosition, position, crossingFraction),
+                Quaternion.Slerp(previousHandoffRotation, rotation, crossingFraction),
+                Vector3.Lerp(previousHandoffVelocity, velocity, crossingFraction),
+                Vector3.Lerp(previousHandoffAngularVelocity, angularVelocity, crossingFraction),
+                previousHandoffServerTime +
+                    (serverTime - previousHandoffServerTime) * crossingFraction);
+            return;
         }
+
+        CacheHandoffSample(
+            position, rotation, velocity, angularVelocity, signedDistance, serverTime);
+    }
+
+    private ulong GetOwnerForDistance(float signedDistance)
+    {
+        if (signedDistance > sideHandoffDeadZone)
+        {
+            return NetworkManager.ServerClientId;
+        }
+
+        if (signedDistance < -sideHandoffDeadZone)
+        {
+            return GetFirstRemoteClientId();
+        }
+
+        return NetworkObject.OwnerClientId;
+    }
+
+    private void CacheHandoffSample(
+        Vector3 position,
+        Quaternion rotation,
+        Vector3 velocity,
+        Vector3 angularVelocity,
+        float signedDistance,
+        double serverTime)
+    {
+        previousHandoffPosition = position;
+        previousHandoffRotation = rotation;
+        previousHandoffVelocity = velocity;
+        previousHandoffAngularVelocity = angularVelocity;
+        previousHandoffDistance = signedDistance;
+        previousHandoffServerTime = serverTime;
+        handoffSampleValid = true;
+    }
+
+    private void ResetHandoffTracking()
+    {
+        authorityHandoffPending = false;
+        handoffSampleValid = false;
     }
 
     private ulong GetFirstRemoteClientId()
@@ -437,38 +534,44 @@ public sealed class TableTennisBall : NetworkBehaviour
         return false;
     }
 
-    private void RequestAuthorityHandoff(ulong destinationOwner)
+    private void RequestAuthorityHandoff(
+        ulong destinationOwner,
+        Vector3 position,
+        Quaternion rotation,
+        Vector3 velocity,
+        Vector3 angularVelocity,
+        double sampleServerTime)
     {
-        if (!IsSpawned || NetworkManager == null ||
+        if (!IsSpawned || NetworkManager == null || authorityHandoffPending ||
             destinationOwner == NetworkObject.OwnerClientId ||
             !IsConnectedClient(destinationOwner))
         {
             return;
         }
 
+        authorityHandoffPending = true;
         uint sequence = ++lastAuthoritySequence;
-        double serverTime = NetworkManager.ServerTime.Time;
         if (IsServer)
         {
             PerformAuthorityHandoff(
                 NetworkManager.LocalClientId,
                 destinationOwner,
-                ballBody.position,
-                ballBody.rotation,
-                ballBody.linearVelocity,
-                ballBody.angularVelocity,
-                serverTime,
+                position,
+                rotation,
+                velocity,
+                angularVelocity,
+                sampleServerTime,
                 sequence);
         }
         else
         {
             RequestAuthorityHandoffServerRpc(
                 destinationOwner,
-                ballBody.position,
-                ballBody.rotation,
-                ballBody.linearVelocity,
-                ballBody.angularVelocity,
-                serverTime,
+                position,
+                rotation,
+                velocity,
+                angularVelocity,
+                sampleServerTime,
                 sequence);
         }
     }
@@ -558,9 +661,13 @@ public sealed class TableTennisBall : NetworkBehaviour
         Vector3 extrapolatedPosition =
             position + velocity * transitTime + Physics.gravity * (0.5f * transitTime * transitTime);
         Vector3 extrapolatedVelocity = velocity + Physics.gravity * transitTime;
+        float rotationAngle = angularVelocity.magnitude * transitTime * Mathf.Rad2Deg;
+        Quaternion extrapolatedRotation = rotationAngle > 0f
+            ? Quaternion.AngleAxis(rotationAngle, angularVelocity.normalized) * rotation
+            : rotation;
         ApplyState(
             extrapolatedPosition,
-            rotation,
+            extrapolatedRotation,
             extrapolatedVelocity,
             angularVelocity,
             sequence);

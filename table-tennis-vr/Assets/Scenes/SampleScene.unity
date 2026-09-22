@@ -5593,6 +5593,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TableTennisBall
   ShowTopMostFoldoutHeaderGroup: 1
   maxSpeed: 18
+  handoffCenter: {fileID: 1137124218}
 --- !u!114 &1183940103
 MonoBehaviour:
   m_ObjectHideFlags: 0
