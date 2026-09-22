@@ -10,14 +10,13 @@ public sealed class TableTennisBall : NetworkBehaviour
     private const ulong NoGrabber = ulong.MaxValue;
 
     [SerializeField] private float maxSpeed = 18f;
-    [SerializeField] private Transform handoffCenter;
-    [SerializeField] private float sideHandoffDeadZone = 0.05f;
+    [SerializeField] private BoxCollider hostTransferZone;
+    [SerializeField] private BoxCollider joiningPlayerTransferZone;
 
     private readonly NetworkVariable<ulong> activeGrabber = new(NoGrabber);
     private Rigidbody ballBody;
     private XRGrabInteractable grabInteractable;
     private XRSelectFilterDelegate ownershipFilter;
-    private TableTennisMRPlacement tablePlacement;
     private bool locallySelected;
     private bool frozen;
     private bool grabRequestPending;
@@ -27,7 +26,6 @@ public sealed class TableTennisBall : NetworkBehaviour
     private Quaternion previousHandoffRotation;
     private Vector3 previousHandoffVelocity;
     private Vector3 previousHandoffAngularVelocity;
-    private float previousHandoffDistance;
     private double previousHandoffServerTime;
     private uint lastAuthoritySequence;
 
@@ -400,15 +398,7 @@ public sealed class TableTennisBall : NetworkBehaviour
             return;
         }
 
-        if (tablePlacement == null)
-        {
-            tablePlacement = FindFirstObjectByType<TableTennisMRPlacement>();
-        }
-
-        Transform reference = handoffCenter != null
-            ? handoffCenter
-            : tablePlacement == null ? null : tablePlacement.TableRoot;
-        if (reference == null)
+        if (hostTransferZone == null || joiningPlayerTransferZone == null)
         {
             return;
         }
@@ -418,14 +408,12 @@ public sealed class TableTennisBall : NetworkBehaviour
         Quaternion rotation = ballBody.rotation;
         Vector3 velocity = ballBody.linearVelocity;
         Vector3 angularVelocity = ballBody.angularVelocity;
-        float signedDistance = Vector3.Dot(position - reference.position, reference.right);
 
         if (!handoffSampleValid)
         {
-            CacheHandoffSample(
-                position, rotation, velocity, angularVelocity, signedDistance, serverTime);
+            CacheHandoffSample(position, rotation, velocity, angularVelocity, serverTime);
 
-            ulong initialOwner = GetOwnerForDistance(signedDistance);
+            ulong initialOwner = GetOwnerForPosition(position);
             if (initialOwner != NetworkObject.OwnerClientId)
             {
                 RequestAuthorityHandoff(
@@ -434,16 +422,16 @@ public sealed class TableTennisBall : NetworkBehaviour
             return;
         }
 
-        ulong desiredOwner = GetOwnerForDistance(signedDistance);
+        ulong desiredOwner = GetOwnerForPosition(position);
         if (desiredOwner != NetworkObject.OwnerClientId)
         {
-            float boundary = signedDistance > 0f
-                ? sideHandoffDeadZone
-                : -sideHandoffDeadZone;
-            float distanceDelta = signedDistance - previousHandoffDistance;
-            float crossingFraction = Mathf.Approximately(distanceDelta, 0f)
-                ? 1f
-                : Mathf.Clamp01((boundary - previousHandoffDistance) / distanceDelta);
+            BoxCollider destinationZone = desiredOwner == NetworkManager.ServerClientId
+                ? hostTransferZone
+                : joiningPlayerTransferZone;
+            float crossingFraction = TryGetZoneEntryFraction(
+                destinationZone, previousHandoffPosition, position, out float entryFraction)
+                ? entryFraction
+                : 1f;
 
             RequestAuthorityHandoff(
                 desiredOwner,
@@ -456,18 +444,17 @@ public sealed class TableTennisBall : NetworkBehaviour
             return;
         }
 
-        CacheHandoffSample(
-            position, rotation, velocity, angularVelocity, signedDistance, serverTime);
+        CacheHandoffSample(position, rotation, velocity, angularVelocity, serverTime);
     }
 
-    private ulong GetOwnerForDistance(float signedDistance)
+    private ulong GetOwnerForPosition(Vector3 position)
     {
-        if (signedDistance > sideHandoffDeadZone)
+        if (Contains(hostTransferZone, position))
         {
             return NetworkManager.ServerClientId;
         }
 
-        if (signedDistance < -sideHandoffDeadZone)
+        if (Contains(joiningPlayerTransferZone, position))
         {
             return GetFirstRemoteClientId();
         }
@@ -480,16 +467,68 @@ public sealed class TableTennisBall : NetworkBehaviour
         Quaternion rotation,
         Vector3 velocity,
         Vector3 angularVelocity,
-        float signedDistance,
         double serverTime)
     {
         previousHandoffPosition = position;
         previousHandoffRotation = rotation;
         previousHandoffVelocity = velocity;
         previousHandoffAngularVelocity = angularVelocity;
-        previousHandoffDistance = signedDistance;
         previousHandoffServerTime = serverTime;
         handoffSampleValid = true;
+    }
+
+    private static bool Contains(BoxCollider zone, Vector3 worldPosition)
+    {
+        Vector3 localPosition = zone.transform.InverseTransformPoint(worldPosition) - zone.center;
+        Vector3 halfSize = zone.size * 0.5f;
+        return Mathf.Abs(localPosition.x) <= halfSize.x &&
+            Mathf.Abs(localPosition.y) <= halfSize.y &&
+            Mathf.Abs(localPosition.z) <= halfSize.z;
+    }
+
+    private static bool TryGetZoneEntryFraction(
+        BoxCollider zone,
+        Vector3 worldStart,
+        Vector3 worldEnd,
+        out float entryFraction)
+    {
+        Vector3 start = zone.transform.InverseTransformPoint(worldStart) - zone.center;
+        Vector3 end = zone.transform.InverseTransformPoint(worldEnd) - zone.center;
+        Vector3 delta = end - start;
+        Vector3 halfSize = zone.size * 0.5f;
+        float enter = 0f;
+        float exit = 1f;
+
+        bool intersects = ClipSegmentAxis(start.x, delta.x, -halfSize.x, halfSize.x, ref enter, ref exit) &&
+            ClipSegmentAxis(start.y, delta.y, -halfSize.y, halfSize.y, ref enter, ref exit) &&
+            ClipSegmentAxis(start.z, delta.z, -halfSize.z, halfSize.z, ref enter, ref exit);
+        entryFraction = enter;
+        return intersects;
+    }
+
+    private static bool ClipSegmentAxis(
+        float start,
+        float delta,
+        float minimum,
+        float maximum,
+        ref float enter,
+        ref float exit)
+    {
+        if (Mathf.Approximately(delta, 0f))
+        {
+            return start >= minimum && start <= maximum;
+        }
+
+        float first = (minimum - start) / delta;
+        float second = (maximum - start) / delta;
+        if (first > second)
+        {
+            (first, second) = (second, first);
+        }
+
+        enter = Mathf.Max(enter, first);
+        exit = Mathf.Min(exit, second);
+        return enter <= exit;
     }
 
     private void ResetHandoffTracking()
