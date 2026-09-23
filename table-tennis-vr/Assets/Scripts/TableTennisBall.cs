@@ -10,16 +10,23 @@ public sealed class TableTennisBall : NetworkBehaviour
     private const ulong NoGrabber = ulong.MaxValue;
 
     [SerializeField] private float maxSpeed = 18f;
-    [SerializeField] private float sideHandoffDeadZone = 0.05f;
+    [SerializeField] private BoxCollider hostTransferZone;
+    [SerializeField] private BoxCollider joiningPlayerTransferZone;
 
     private readonly NetworkVariable<ulong> activeGrabber = new(NoGrabber);
     private Rigidbody ballBody;
     private XRGrabInteractable grabInteractable;
     private XRSelectFilterDelegate ownershipFilter;
-    private TableTennisMRPlacement tablePlacement;
     private bool locallySelected;
     private bool frozen;
     private bool grabRequestPending;
+    private bool authorityHandoffPending;
+    private bool handoffSampleValid;
+    private Vector3 previousHandoffPosition;
+    private Quaternion previousHandoffRotation;
+    private Vector3 previousHandoffVelocity;
+    private Vector3 previousHandoffAngularVelocity;
+    private double previousHandoffServerTime;
     private uint lastAuthoritySequence;
 
     public Vector3 LinearVelocity => ballBody == null ? Vector3.zero : ballBody.linearVelocity;
@@ -63,18 +70,21 @@ public sealed class TableTennisBall : NetworkBehaviour
         }
 
         grabRequestPending = false;
+        ResetHandoffTracking();
         ApplyInteractionAuthority();
     }
 
     public override void OnGainedOwnership()
     {
         grabRequestPending = false;
+        ResetHandoffTracking();
         ApplyInteractionAuthority();
     }
 
     public override void OnLostOwnership()
     {
         grabRequestPending = false;
+        ResetHandoffTracking();
         if (locallySelected && grabInteractable != null)
         {
             grabInteractable.interactionManager?.CancelInteractableSelection(
@@ -95,6 +105,7 @@ public sealed class TableTennisBall : NetworkBehaviour
 
         locallySelected = false;
         grabRequestPending = false;
+        ResetHandoffTracking();
         ApplyInteractionAuthority();
     }
 
@@ -132,12 +143,16 @@ public sealed class TableTennisBall : NetworkBehaviour
             return;
         }
 
-        if (!locallySelected)
+        ballBody.linearVelocity = Vector3.ClampMagnitude(ballBody.linearVelocity, maxSpeed);
+
+        if (locallySelected)
+        {
+            handoffSampleValid = false;
+        }
+        else
         {
             TryHandoffAcrossNet();
         }
-
-        ballBody.linearVelocity = Vector3.ClampMagnitude(ballBody.linearVelocity, maxSpeed);
     }
 
     public void ResetForServe(Vector3 position)
@@ -149,6 +164,7 @@ public sealed class TableTennisBall : NetworkBehaviour
 
         frozen = false;
         activeGrabber.Value = NoGrabber;
+        ResetHandoffTracking();
         if (IsSpawned && NetworkObject.OwnerClientId != NetworkManager.ServerClientId)
         {
             NetworkObject.RemoveOwnership();
@@ -233,6 +249,7 @@ public sealed class TableTennisBall : NetworkBehaviour
     {
         locallySelected = true;
         grabRequestPending = false;
+        ResetHandoffTracking();
         if (!IsSpawned || NetworkManager == null)
         {
             return;
@@ -251,6 +268,7 @@ public sealed class TableTennisBall : NetworkBehaviour
     private void HandleSelectExited(SelectExitEventArgs _)
     {
         locallySelected = false;
+        ResetHandoffTracking();
         // Synchronize the Rigidbody before physics resumes so release starts at
         // the controller pose and keeps the throw velocity XRI applies afterward.
         ballBody.position = transform.position;
@@ -372,33 +390,151 @@ public sealed class TableTennisBall : NetworkBehaviour
 
     private void TryHandoffAcrossNet()
     {
-        if (!IsSpawned || activeGrabber.Value != NoGrabber)
+        bool releasedByLocalOwner = NetworkManager != null &&
+            activeGrabber.Value == NetworkManager.LocalClientId && !locallySelected;
+        if (!IsSpawned || authorityHandoffPending ||
+            (activeGrabber.Value != NoGrabber && !releasedByLocalOwner))
         {
             return;
         }
 
-        if (tablePlacement == null)
-        {
-            tablePlacement = FindFirstObjectByType<TableTennisMRPlacement>();
-        }
-
-        Transform tableRoot = tablePlacement == null ? null : tablePlacement.TableRoot;
-        if (tableRoot == null)
+        if (hostTransferZone == null || joiningPlayerTransferZone == null)
         {
             return;
         }
 
-        float localX = tableRoot.InverseTransformPoint(ballBody.position).x;
-        if (Mathf.Abs(localX) <= sideHandoffDeadZone)
+        double serverTime = NetworkManager.ServerTime.Time;
+        Vector3 position = ballBody.position;
+        Quaternion rotation = ballBody.rotation;
+        Vector3 velocity = ballBody.linearVelocity;
+        Vector3 angularVelocity = ballBody.angularVelocity;
+
+        if (!handoffSampleValid)
         {
+            CacheHandoffSample(position, rotation, velocity, angularVelocity, serverTime);
+
+            ulong initialOwner = GetOwnerForPosition(position);
+            if (initialOwner != NetworkObject.OwnerClientId)
+            {
+                RequestAuthorityHandoff(
+                    initialOwner, position, rotation, velocity, angularVelocity, serverTime);
+            }
             return;
         }
 
-        ulong desiredOwner = localX > 0f ? NetworkManager.ServerClientId : GetFirstRemoteClientId();
+        ulong desiredOwner = GetOwnerForPosition(position);
         if (desiredOwner != NetworkObject.OwnerClientId)
         {
-            RequestAuthorityHandoff(desiredOwner);
+            BoxCollider destinationZone = desiredOwner == NetworkManager.ServerClientId
+                ? hostTransferZone
+                : joiningPlayerTransferZone;
+            float crossingFraction = TryGetZoneEntryFraction(
+                destinationZone, previousHandoffPosition, position, out float entryFraction)
+                ? entryFraction
+                : 1f;
+
+            RequestAuthorityHandoff(
+                desiredOwner,
+                Vector3.Lerp(previousHandoffPosition, position, crossingFraction),
+                Quaternion.Slerp(previousHandoffRotation, rotation, crossingFraction),
+                Vector3.Lerp(previousHandoffVelocity, velocity, crossingFraction),
+                Vector3.Lerp(previousHandoffAngularVelocity, angularVelocity, crossingFraction),
+                previousHandoffServerTime +
+                    (serverTime - previousHandoffServerTime) * crossingFraction);
+            return;
         }
+
+        CacheHandoffSample(position, rotation, velocity, angularVelocity, serverTime);
+    }
+
+    private ulong GetOwnerForPosition(Vector3 position)
+    {
+        if (Contains(hostTransferZone, position))
+        {
+            return NetworkManager.ServerClientId;
+        }
+
+        if (Contains(joiningPlayerTransferZone, position))
+        {
+            return GetFirstRemoteClientId();
+        }
+
+        return NetworkObject.OwnerClientId;
+    }
+
+    private void CacheHandoffSample(
+        Vector3 position,
+        Quaternion rotation,
+        Vector3 velocity,
+        Vector3 angularVelocity,
+        double serverTime)
+    {
+        previousHandoffPosition = position;
+        previousHandoffRotation = rotation;
+        previousHandoffVelocity = velocity;
+        previousHandoffAngularVelocity = angularVelocity;
+        previousHandoffServerTime = serverTime;
+        handoffSampleValid = true;
+    }
+
+    private static bool Contains(BoxCollider zone, Vector3 worldPosition)
+    {
+        Vector3 localPosition = zone.transform.InverseTransformPoint(worldPosition) - zone.center;
+        Vector3 halfSize = zone.size * 0.5f;
+        return Mathf.Abs(localPosition.x) <= halfSize.x &&
+            Mathf.Abs(localPosition.y) <= halfSize.y &&
+            Mathf.Abs(localPosition.z) <= halfSize.z;
+    }
+
+    private static bool TryGetZoneEntryFraction(
+        BoxCollider zone,
+        Vector3 worldStart,
+        Vector3 worldEnd,
+        out float entryFraction)
+    {
+        Vector3 start = zone.transform.InverseTransformPoint(worldStart) - zone.center;
+        Vector3 end = zone.transform.InverseTransformPoint(worldEnd) - zone.center;
+        Vector3 delta = end - start;
+        Vector3 halfSize = zone.size * 0.5f;
+        float enter = 0f;
+        float exit = 1f;
+
+        bool intersects = ClipSegmentAxis(start.x, delta.x, -halfSize.x, halfSize.x, ref enter, ref exit) &&
+            ClipSegmentAxis(start.y, delta.y, -halfSize.y, halfSize.y, ref enter, ref exit) &&
+            ClipSegmentAxis(start.z, delta.z, -halfSize.z, halfSize.z, ref enter, ref exit);
+        entryFraction = enter;
+        return intersects;
+    }
+
+    private static bool ClipSegmentAxis(
+        float start,
+        float delta,
+        float minimum,
+        float maximum,
+        ref float enter,
+        ref float exit)
+    {
+        if (Mathf.Approximately(delta, 0f))
+        {
+            return start >= minimum && start <= maximum;
+        }
+
+        float first = (minimum - start) / delta;
+        float second = (maximum - start) / delta;
+        if (first > second)
+        {
+            (first, second) = (second, first);
+        }
+
+        enter = Mathf.Max(enter, first);
+        exit = Mathf.Min(exit, second);
+        return enter <= exit;
+    }
+
+    private void ResetHandoffTracking()
+    {
+        authorityHandoffPending = false;
+        handoffSampleValid = false;
     }
 
     private ulong GetFirstRemoteClientId()
@@ -437,38 +573,44 @@ public sealed class TableTennisBall : NetworkBehaviour
         return false;
     }
 
-    private void RequestAuthorityHandoff(ulong destinationOwner)
+    private void RequestAuthorityHandoff(
+        ulong destinationOwner,
+        Vector3 position,
+        Quaternion rotation,
+        Vector3 velocity,
+        Vector3 angularVelocity,
+        double sampleServerTime)
     {
-        if (!IsSpawned || NetworkManager == null ||
+        if (!IsSpawned || NetworkManager == null || authorityHandoffPending ||
             destinationOwner == NetworkObject.OwnerClientId ||
             !IsConnectedClient(destinationOwner))
         {
             return;
         }
 
+        authorityHandoffPending = true;
         uint sequence = ++lastAuthoritySequence;
-        double serverTime = NetworkManager.ServerTime.Time;
         if (IsServer)
         {
             PerformAuthorityHandoff(
                 NetworkManager.LocalClientId,
                 destinationOwner,
-                ballBody.position,
-                ballBody.rotation,
-                ballBody.linearVelocity,
-                ballBody.angularVelocity,
-                serverTime,
+                position,
+                rotation,
+                velocity,
+                angularVelocity,
+                sampleServerTime,
                 sequence);
         }
         else
         {
             RequestAuthorityHandoffServerRpc(
                 destinationOwner,
-                ballBody.position,
-                ballBody.rotation,
-                ballBody.linearVelocity,
-                ballBody.angularVelocity,
-                serverTime,
+                position,
+                rotation,
+                velocity,
+                angularVelocity,
+                sampleServerTime,
                 sequence);
         }
     }
@@ -558,9 +700,13 @@ public sealed class TableTennisBall : NetworkBehaviour
         Vector3 extrapolatedPosition =
             position + velocity * transitTime + Physics.gravity * (0.5f * transitTime * transitTime);
         Vector3 extrapolatedVelocity = velocity + Physics.gravity * transitTime;
+        float rotationAngle = angularVelocity.magnitude * transitTime * Mathf.Rad2Deg;
+        Quaternion extrapolatedRotation = rotationAngle > 0f
+            ? Quaternion.AngleAxis(rotationAngle, angularVelocity.normalized) * rotation
+            : rotation;
         ApplyState(
             extrapolatedPosition,
-            rotation,
+            extrapolatedRotation,
             extrapolatedVelocity,
             angularVelocity,
             sequence);
