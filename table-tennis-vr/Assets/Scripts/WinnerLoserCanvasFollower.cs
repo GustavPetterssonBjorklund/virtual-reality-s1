@@ -1,5 +1,6 @@
 using System.Collections;
 using TMPro;
+using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -12,11 +13,16 @@ public sealed class WinnerLoserCanvasFollower : MonoBehaviour
     [SerializeField] private GameObject loserResult;
     [SerializeField] private float animationDuration = 0.55f;
     [SerializeField] private float spinAngle = 24f;
+    [Header("Match Result")]
+    [SerializeField] private TableTennisMatch match;
+    [SerializeField] private bool showTestControls = true;
 
     private Transform head;
     private Coroutine resultAnimation;
     private Vector3 winnerScale;
     private Vector3 loserScale;
+    private int displayedWinner;
+    private int displayedLocalPlayer;
 
     private void Awake()
     {
@@ -24,7 +30,46 @@ public sealed class WinnerLoserCanvasFollower : MonoBehaviour
         loserScale = loserResult.transform.localScale;
         winnerResult.SetActive(false);
         loserResult.SetActive(false);
-        CreateTestControls();
+        if (showTestControls)
+            CreateTestControls();
+    }
+
+    private void Update()
+    {
+        if (match == null)
+            return;
+
+        if (!match.IsGameOver || (match.Winner != 1 && match.Winner != 2))
+        {
+            if (displayedWinner != 0)
+                HideResult();
+            return;
+        }
+
+        // The host owns Player 1; the joining client owns Player 2.
+        // Offline/solo play also uses Player 1.
+        NetworkManager manager = NetworkManager.Singleton;
+        int localPlayer = manager != null && manager.IsListening && !manager.IsServer ? 2 : 1;
+        if (displayedWinner == match.Winner && displayedLocalPlayer == localPlayer)
+            return;
+
+        displayedWinner = match.Winner;
+        displayedLocalPlayer = localPlayer;
+        if (match.Winner == localPlayer)
+            ShowWinner();
+        else
+            ShowLoser();
+    }
+
+    public void HideResult()
+    {
+        if (resultAnimation != null)
+            StopCoroutine(resultAnimation);
+        resultAnimation = null;
+        winnerResult.SetActive(false);
+        loserResult.SetActive(false);
+        displayedWinner = 0;
+        displayedLocalPlayer = 0;
     }
 
     private void LateUpdate()
