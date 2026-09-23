@@ -131,6 +131,7 @@ GameObject:
   - component: {fileID: 3898583081410558331}
   - component: {fileID: 8634528041860395204}
   - component: {fileID: 8634528041860395203}
+  - component: {fileID: 8634528041860395202}
   m_Layer: 0
   m_Name: Racket
   m_TagString: Untagged
@@ -379,7 +380,7 @@ MonoBehaviour:
   ActiveSceneSynchronization: 0
   SceneMigrationSynchronization: 1
   SpawnWithObservers: 1
-  DontDestroyWithOwner: 0
+  DontDestroyWithOwner: 1
   AutoObjectParentSync: 1
   SyncOwnerTransformWhenParented: 1
   AllowOwnerToParent: 0
@@ -458,6 +459,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TableTennisNetworkRacket
   ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &8634528041860395202
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5617678960556187694}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a5d3c71e4b84f76b2c9801d6e73a4f2, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::SharedNetworkGrabOwnership
+  reservationTimeout: 2
 --- !u!1 &6221964045601628364
 GameObject:
   m_ObjectHideFlags: 0

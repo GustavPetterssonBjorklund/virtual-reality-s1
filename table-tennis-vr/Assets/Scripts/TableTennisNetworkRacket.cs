@@ -3,10 +3,11 @@ using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
-
+[RequireComponent(typeof(SharedNetworkGrabOwnership))]
 public sealed class TableTennisNetworkRacket : NetworkBehaviour
 {
     private XRGrabInteractable grabInteractable;
+    private SharedNetworkGrabOwnership grabOwnership;
     private Rigidbody body;
     private Collider[] racketColliders;
     private TableTennisMRPlacement tablePlacement;
@@ -19,12 +20,13 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
     private Quaternion spawnWorldRotation;
     private bool hasSpawnPose;
 
-    public bool IsPhysicsAuthority => !IsSpawned || IsOwner;
+    public bool IsPhysicsAuthority => grabOwnership == null || grabOwnership.HasPhysicsAuthority;
     public bool IsKinematic => body != null && body.isKinematic;
 
     private void Awake()
     {
         grabInteractable = GetComponent<XRGrabInteractable>();
+        grabOwnership = GetComponent<SharedNetworkGrabOwnership>();
         body = GetComponent<Rigidbody>();
         racketColliders = GetComponentsInChildren<Collider>(true);
         body.useGravity = true;
@@ -45,24 +47,20 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
             CaptureSpawnPose();
         }
 
-        ApplyInteractionAuthority();
         RestoreOfflinePhysics();
     }
 
     public override void OnNetworkSpawn()
     {
-        if (IsOwner)
+        if (IsPhysicsAuthority)
         {
             CaptureSpawnPose();
         }
-
-        ApplyInteractionAuthority();
     }
 
     public override void OnNetworkDespawn()
     {
         SetTableCollisionIgnored(false);
-        ApplyInteractionAuthority();
     }
 
     public override void OnDestroy()
@@ -80,14 +78,6 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
     private void Update()
     {
         RestoreOfflinePhysics();
-    }
-
-    private void ApplyInteractionAuthority()
-    {
-        if (grabInteractable != null)
-        {
-            grabInteractable.enabled = !IsSpawned || IsOwner;
-        }
     }
 
     private void HandleSelectEntered(SelectEnterEventArgs _)
@@ -147,7 +137,7 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
 
         if (IsServer)
         {
-            ResetToSpawnRpc();
+            ResetToSpawnOnServer();
             return;
         }
 
@@ -157,16 +147,18 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     private void RequestResetToSpawnServerRpc()
     {
-        ResetToSpawnRpc();
+        ResetToSpawnOnServer();
     }
 
-    [Rpc(SendTo.Everyone)]
-    private void ResetToSpawnRpc()
+    private void ResetToSpawnOnServer()
     {
-        if (IsOwner)
+        if (!IsServer)
         {
-            ResetToSpawnPose();
+            return;
         }
+
+        grabOwnership?.ForceReleaseToServer();
+        ResetToSpawnPose();
     }
 
     private void CaptureSpawnPose()
@@ -211,7 +203,10 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
             body.angularVelocity = Vector3.zero;
         }
 
-        ApplyInteractionAuthority();
+        if (grabInteractable != null)
+        {
+            grabInteractable.enabled = true;
+        }
     }
 
     private void RestoreOfflinePhysics()

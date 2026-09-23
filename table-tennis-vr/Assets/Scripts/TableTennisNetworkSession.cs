@@ -14,8 +14,6 @@ using UnityTransport = Unity.Netcode.Transports.UTP.UnityTransport;
 
 public sealed class TableTennisNetworkSession : MonoBehaviour
 {
-    [SerializeField] private GameObject racketPrefab;
-    [SerializeField] private Transform remoteRacketSpawnAnchor;
     [SerializeField] private int maxConnections = 1;
     [SerializeField] private string connectionType = "dtls";
 
@@ -227,36 +225,15 @@ public sealed class TableTennisNetworkSession : MonoBehaviour
         }
 
         networkManager.NetworkConfig.TickRate = 60;
-
-        if (racketPrefab != null && !networkManager.NetworkConfig.Prefabs.Contains(racketPrefab))
-        {
-            networkManager.NetworkConfig.Prefabs.Add(new NetworkPrefab { Prefab = racketPrefab });
-        }
     }
 
     private void HandleClientConnected(ulong clientId)
     {
-        if (!networkManager.IsServer || clientId == NetworkManager.ServerClientId || racketPrefab == null)
+        if (!networkManager.IsServer || clientId == NetworkManager.ServerClientId)
         {
             return;
         }
 
-        Vector3 spawnPosition = remoteRacketSpawnAnchor != null
-            ? remoteRacketSpawnAnchor.position
-            : transform.TransformPoint(new Vector3(-1f, 1.15f, 0.25f));
-        Quaternion spawnRotation = remoteRacketSpawnAnchor != null
-            ? remoteRacketSpawnAnchor.rotation
-            : transform.rotation;
-        GameObject racket = Instantiate(racketPrefab, spawnPosition, spawnRotation);
-        NetworkObject networkObject = racket.GetComponent<NetworkObject>();
-        if (networkObject == null)
-        {
-            Destroy(racket);
-            Debug.LogError("The racket prefab needs a NetworkObject component.");
-            return;
-        }
-
-        networkObject.SpawnWithOwnership(clientId);
         SetStatus("Player 2 connected.");
     }
 

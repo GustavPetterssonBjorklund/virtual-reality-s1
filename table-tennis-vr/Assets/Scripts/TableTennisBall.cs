@@ -1,39 +1,36 @@
-using System.Collections;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
-using UnityEngine.XR.Interaction.Toolkit.Filtering;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
+[RequireComponent(typeof(SharedNetworkGrabOwnership))]
 public sealed class TableTennisBall : NetworkBehaviour
 {
-    private const ulong NoGrabber = ulong.MaxValue;
-
     [SerializeField] private float maxSpeed = 18f;
     [SerializeField] private float sideHandoffDeadZone = 0.05f;
 
-    private readonly NetworkVariable<ulong> activeGrabber = new(NoGrabber);
     private Rigidbody ballBody;
     private XRGrabInteractable grabInteractable;
-    private XRSelectFilterDelegate ownershipFilter;
+    private SharedNetworkGrabOwnership grabOwnership;
     private TableTennisMRPlacement tablePlacement;
-    private bool locallySelected;
     private bool frozen;
-    private bool grabRequestPending;
     private uint lastAuthoritySequence;
 
     public Vector3 LinearVelocity => ballBody == null ? Vector3.zero : ballBody.linearVelocity;
     public Vector3 AngularVelocity => ballBody == null ? Vector3.zero : ballBody.angularVelocity;
     public bool IsFrozen => frozen;
-    public bool IsPhysicsAuthority => !IsSpawned || IsOwner;
+    public bool IsPhysicsAuthority => grabOwnership == null || grabOwnership.HasPhysicsAuthority;
     public bool IsKinematic => ballBody != null && ballBody.isKinematic;
-    public ulong ActiveGrabber => activeGrabber.Value;
+    public ulong ActiveGrabber => grabOwnership == null
+        ? SharedNetworkGrabOwnership.NoGrabber
+        : grabOwnership.ActiveGrabber;
     public uint LastAuthoritySequence => lastAuthoritySequence;
 
     private void Awake()
     {
         ballBody = GetComponent<Rigidbody>();
         grabInteractable = GetComponent<XRGrabInteractable>();
+        grabOwnership = GetComponent<SharedNetworkGrabOwnership>();
         ballBody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         ballBody.interpolation = RigidbodyInterpolation.Interpolate;
         ballBody.solverIterations = 10;
@@ -41,72 +38,19 @@ public sealed class TableTennisBall : NetworkBehaviour
 
         if (grabInteractable != null)
         {
-            ownershipFilter = new XRSelectFilterDelegate(CanSelect);
-            grabInteractable.selectFilters.Add(ownershipFilter);
-            grabInteractable.selectEntered.AddListener(HandleSelectEntered);
             grabInteractable.selectExited.AddListener(HandleSelectExited);
         }
     }
 
     private void Start()
     {
-        ApplyInteractionAuthority();
         RestoreOfflinePhysics();
-    }
-
-    public override void OnNetworkSpawn()
-    {
-        activeGrabber.OnValueChanged += HandleGrabberChanged;
-        if (IsServer && NetworkManager != null)
-        {
-            NetworkManager.OnClientDisconnectCallback += HandleClientDisconnected;
-        }
-
-        grabRequestPending = false;
-        ApplyInteractionAuthority();
-    }
-
-    public override void OnGainedOwnership()
-    {
-        grabRequestPending = false;
-        ApplyInteractionAuthority();
-    }
-
-    public override void OnLostOwnership()
-    {
-        grabRequestPending = false;
-        if (locallySelected && grabInteractable != null)
-        {
-            grabInteractable.interactionManager?.CancelInteractableSelection(
-                (IXRSelectInteractable)grabInteractable);
-            locallySelected = false;
-        }
-
-        ApplyInteractionAuthority();
-    }
-
-    public override void OnNetworkDespawn()
-    {
-        activeGrabber.OnValueChanged -= HandleGrabberChanged;
-        if (NetworkManager != null)
-        {
-            NetworkManager.OnClientDisconnectCallback -= HandleClientDisconnected;
-        }
-
-        locallySelected = false;
-        grabRequestPending = false;
-        ApplyInteractionAuthority();
     }
 
     public override void OnDestroy()
     {
         if (grabInteractable != null)
         {
-            if (ownershipFilter != null)
-            {
-                grabInteractable.selectFilters.Remove(ownershipFilter);
-            }
-            grabInteractable.selectEntered.RemoveListener(HandleSelectEntered);
             grabInteractable.selectExited.RemoveListener(HandleSelectExited);
         }
 
@@ -132,7 +76,7 @@ public sealed class TableTennisBall : NetworkBehaviour
             return;
         }
 
-        if (!locallySelected)
+        if (grabOwnership == null || !grabOwnership.IsLocallySelected)
         {
             TryHandoffAcrossNet();
         }
@@ -148,10 +92,9 @@ public sealed class TableTennisBall : NetworkBehaviour
         }
 
         frozen = false;
-        activeGrabber.Value = NoGrabber;
-        if (IsSpawned && NetworkObject.OwnerClientId != NetworkManager.ServerClientId)
+        if (IsSpawned && grabOwnership != null)
         {
-            NetworkObject.RemoveOwnership();
+            grabOwnership.ForceReleaseToServer();
         }
 
         ApplyState(position, Quaternion.identity, Vector3.zero, Vector3.zero, ++lastAuthoritySequence);
@@ -183,196 +126,20 @@ public sealed class TableTennisBall : NetworkBehaviour
         }
     }
 
-    private bool CanSelect(
-        UnityEngine.XR.Interaction.Toolkit.Interactors.IXRSelectInteractor _,
-        IXRSelectInteractable __)
-    {
-        if (!IsSpawned)
-        {
-            return true;
-        }
-
-        if (NetworkManager == null || !NetworkManager.IsListening)
-        {
-            return true;
-        }
-
-        ulong localClientId = NetworkManager.LocalClientId;
-        if (IsOwner && (activeGrabber.Value == NoGrabber || activeGrabber.Value == localClientId))
-        {
-            return true;
-        }
-
-        if (!grabRequestPending && activeGrabber.Value == NoGrabber)
-        {
-            grabRequestPending = true;
-            if (IsServer)
-            {
-                GiveGrabAuthority(localClientId);
-            }
-            else
-            {
-                RequestGrabServerRpc();
-            }
-        }
-
-        return false;
-    }
-
-    private void ApplyInteractionAuthority()
-    {
-        if (grabInteractable != null)
-        {
-            // Selection filters pause a remote grab until ownership arrives.
-            // Keeping this enabled lets both peers initiate that handshake.
-            grabInteractable.enabled = true;
-        }
-    }
-
-    private void HandleSelectEntered(SelectEnterEventArgs _)
-    {
-        locallySelected = true;
-        grabRequestPending = false;
-        if (!IsSpawned || NetworkManager == null)
-        {
-            return;
-        }
-
-        if (IsServer)
-        {
-            ConfirmGrab(NetworkManager.LocalClientId);
-        }
-        else
-        {
-            ConfirmGrabServerRpc();
-        }
-    }
-
     private void HandleSelectExited(SelectExitEventArgs _)
     {
-        locallySelected = false;
         // Synchronize the Rigidbody before physics resumes so release starts at
         // the controller pose and keeps the throw velocity XRI applies afterward.
         ballBody.position = transform.position;
         ballBody.rotation = transform.rotation;
         Physics.SyncTransforms();
-        if (IsSpawned)
-        {
-            StartCoroutine(ClearGrabberAfterDetach());
-        }
-    }
-
-    private IEnumerator ClearGrabberAfterDetach()
-    {
-        // XRI writes throw velocity in LateUpdate. Waiting through the end of
-        // the frame preserves that velocity and avoids a visible release rewind.
-        yield return new WaitForEndOfFrame();
-
-        if (!IsSpawned || NetworkManager == null)
-        {
-            yield break;
-        }
-
-        if (IsServer)
-        {
-            ClearGrabber(NetworkManager.LocalClientId);
-        }
-        else
-        {
-            ClearGrabberServerRpc();
-        }
-    }
-
-    private void HandleGrabberChanged(ulong _, ulong newGrabber)
-    {
-        if (!locallySelected || !IsSpawned || NetworkManager == null ||
-            newGrabber == NetworkManager.LocalClientId)
-        {
-            return;
-        }
-
-        grabInteractable.interactionManager?.CancelInteractableSelection(
-            (IXRSelectInteractable)grabInteractable);
-        locallySelected = false;
-    }
-
-    private void HandleClientDisconnected(ulong clientId)
-    {
-        if (!IsServer)
-        {
-            return;
-        }
-
-        if (activeGrabber.Value == clientId)
-        {
-            activeGrabber.Value = NoGrabber;
-        }
-
-        if (NetworkObject.OwnerClientId == clientId)
-        {
-            NetworkObject.RemoveOwnership();
-        }
-    }
-
-    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void RequestGrabServerRpc(RpcParams rpcParams = default)
-    {
-        GiveGrabAuthority(rpcParams.Receive.SenderClientId);
-    }
-
-    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void ConfirmGrabServerRpc(RpcParams rpcParams = default)
-    {
-        ConfirmGrab(rpcParams.Receive.SenderClientId);
-    }
-
-    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void ClearGrabberServerRpc(RpcParams rpcParams = default)
-    {
-        ClearGrabber(rpcParams.Receive.SenderClientId);
-    }
-
-    private void GiveGrabAuthority(ulong clientId)
-    {
-        if (!IsServer || NetworkObject == null || activeGrabber.Value != NoGrabber)
-        {
-            return;
-        }
-
-        if (NetworkObject.OwnerClientId != clientId)
-        {
-            NetworkObject.ChangeOwnership(clientId);
-        }
-    }
-
-    private void ConfirmGrab(ulong clientId)
-    {
-        if (!IsServer || NetworkObject == null ||
-            (activeGrabber.Value != NoGrabber && activeGrabber.Value != clientId))
-        {
-            return;
-        }
-
-        if (NetworkObject.OwnerClientId != clientId)
-        {
-            NetworkObject.ChangeOwnership(clientId);
-        }
-        activeGrabber.Value = clientId;
-    }
-
-    private void ClearGrabber(ulong clientId)
-    {
-        if (IsServer && activeGrabber.Value == clientId)
-        {
-            // Retain ownership after release. The releasing peer remains the
-            // physics writer until the ball crosses the net.
-            activeGrabber.Value = NoGrabber;
-        }
     }
 
     private void TryHandoffAcrossNet()
     {
-        if (!IsSpawned || activeGrabber.Value != NoGrabber)
+        if (!IsSpawned ||
+            (grabOwnership != null &&
+             grabOwnership.ActiveGrabber != SharedNetworkGrabOwnership.NoGrabber))
         {
             return;
         }

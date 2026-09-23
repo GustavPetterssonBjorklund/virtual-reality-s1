@@ -11,6 +11,8 @@
 **/[Mm]emoryCaptures/
 **/[Rr]ecordings/
 **/.utmp/
+table-tennis-vr/Assets/Resources/PerformanceTestRunInfo.*
+table-tennis-vr/Assets/Resources/PerformanceTestRunSettings.*
 
 # Generated MCP/Unity screenshots
 **/Assets/Screenshots/
