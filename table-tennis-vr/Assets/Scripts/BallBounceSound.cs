@@ -3,10 +3,13 @@ using UnityEngine;
 public class BallBounceSound : MonoBehaviour
 {
     public AudioSource audioSource;
-    public AudioClip bouncesound;
+    public AudioClip bounceSound;
 
     private void OnCollisionEnter(Collision collision)
     {
-        audioSource.PlayOneShot(bouncesound);
+        if (collision.relativeVelocity.magnitude > 0.5f)
+        {
+            audioSource.PlayOneShot(bounceSound);
+        }
     }
 }
