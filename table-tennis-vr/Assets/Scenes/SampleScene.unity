@@ -5610,6 +5610,7 @@ GameObject:
   - component: {fileID: 1183940104}
   - component: {fileID: 1183940105}
   - component: {fileID: 1183940106}
+  - component: {fileID: 1183940107}
   m_Layer: 0
   m_Name: Ball
   m_TagString: Untagged
@@ -5971,6 +5972,20 @@ MonoBehaviour:
   UseRigidBodyForMotion: 1
   AutoUpdateKinematicState: 1
   AutoSetKinematicOnDespawn: 1
+--- !u!114 &1183940107
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1183940096}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a5d3c71e4b84f76b2c9801d6e73a4f2, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::SharedNetworkGrabOwnership
+  ShowTopMostFoldoutHeaderGroup: 1
+  reservationTimeout: 2
 --- !u!1 &1216827929
 GameObject:
   m_ObjectHideFlags: 0
@@ -6236,6 +6251,7 @@ Transform:
   - {fileID: 40191615}
   - {fileID: 1183940097}
   - {fileID: 4685771098851857802}
+  - {fileID: 8163059758246112071}
   - {fileID: 497614196}
   - {fileID: 1414105708}
   - {fileID: 1907740983}
@@ -6309,8 +6325,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 80e6cc6095d6a71b5965423b82a35e97, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TableTennisNetworkSession
-  racketPrefab: {fileID: 5617678960556187694, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
-  remoteRacketSpawnAnchor: {fileID: 978643606}
   maxConnections: 1
   connectionType: dtls
   networkCanvas: {fileID: 574723936}
@@ -9530,9 +9544,25 @@ PrefabInstance:
       propertyPath: m_MovementType
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 2328134516640187114, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+      propertyPath: m_InScenePlaced
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2328134516640187114, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 3785127035
+      objectReference: {fileID: 0}
+    - target: {fileID: 2328134516640187114, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+      propertyPath: SceneMigrationSynchronization
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2328134516640187114, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+      propertyPath: InScenePlacedSourceGlobalObjectIdHash
+      value: 1489496253
+      objectReference: {fileID: 0}
     - target: {fileID: 5617678960556187694, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
       propertyPath: m_Name
-      value: Racket
+      value: Racket 1
       objectReference: {fileID: 0}
     - target: {fileID: 7897164767988043614, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
       propertyPath: m_LocalPosition.x
@@ -9577,47 +9607,91 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 5617678960556187694, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 7019263811535256315}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
 --- !u!4 &4685771098851857802 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 7897164767988043614, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
   m_PrefabInstance: {fileID: 2725433307952139533}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &7019263811535256314 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 5617678960556187694, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
-  m_PrefabInstance: {fileID: 2725433307952139533}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &7019263811535256315
-MonoBehaviour:
+--- !u!1001 &8163059758246112070
+PrefabInstance:
   m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 1328640061}
+    m_Modifications:
+    - target: {fileID: 2328134516640187114, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+      propertyPath: m_InScenePlaced
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2328134516640187114, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+      propertyPath: GlobalObjectIdHash
+      value: 3583498347
+      objectReference: {fileID: 0}
+    - target: {fileID: 2328134516640187114, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+      propertyPath: SceneMigrationSynchronization
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2328134516640187114, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+      propertyPath: InScenePlacedSourceGlobalObjectIdHash
+      value: 1489496253
+      objectReference: {fileID: 0}
+    - target: {fileID: 5617678960556187694, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+      propertyPath: m_Name
+      value: Racket 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 7897164767988043614, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7897164767988043614, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 1.15
+      objectReference: {fileID: 0}
+    - target: {fileID: 7897164767988043614, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0.25
+      objectReference: {fileID: 0}
+    - target: {fileID: 7897164767988043614, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7897164767988043614, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7897164767988043614, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7897164767988043614, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7897164767988043614, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7897164767988043614, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7897164767988043614, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+--- !u!4 &8163059758246112071 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 7897164767988043614, guid: d5959c96ccbd5084a9c3d58c3f63f75e, type: 3}
+  m_PrefabInstance: {fileID: 8163059758246112070}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7019263811535256314}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3904338822
-  InScenePlacedSourceGlobalObjectIdHash: 0
-  DeferredDespawnTick: 0
-  Ownership: 1
-  AlwaysReplicateAsRoot: 0
-  SynchronizeTransform: 1
-  m_InScenePlaced: 1
-  ActiveSceneSynchronization: 0
-  SceneMigrationSynchronization: 0
-  SpawnWithObservers: 1
-  DontDestroyWithOwner: 0
-  AutoObjectParentSync: 1
-  SyncOwnerTransformWhenParented: 1
-  AllowOwnerToParent: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
