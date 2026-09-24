@@ -3,27 +3,34 @@ using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
+[RequireComponent(typeof(SharedNetworkGrabOwnership))]
 public sealed class TableTennisBall : NetworkBehaviour
 {
-    private const ulong NoGrabber = ulong.MaxValue;
-
     [SerializeField] private float maxSpeed = 18f;
-    private readonly NetworkVariable<ulong> activeGrabber = new(NoGrabber);
+    [SerializeField] private float sideHandoffDeadZone = 0.05f;
+
     private Rigidbody ballBody;
     private XRGrabInteractable grabInteractable;
-    private bool locallySelected;
+    private SharedNetworkGrabOwnership grabOwnership;
+    private TableTennisMRPlacement tablePlacement;
     private bool frozen;
+    private uint lastAuthoritySequence;
 
     public Vector3 LinearVelocity => ballBody == null ? Vector3.zero : ballBody.linearVelocity;
+    public Vector3 AngularVelocity => ballBody == null ? Vector3.zero : ballBody.angularVelocity;
     public bool IsFrozen => frozen;
-    public bool IsPhysicsAuthority => !IsSpawned || IsOwner;
+    public bool IsPhysicsAuthority => grabOwnership == null || grabOwnership.HasPhysicsAuthority;
     public bool IsKinematic => ballBody != null && ballBody.isKinematic;
-    public ulong ActiveGrabber => activeGrabber.Value;
+    public ulong ActiveGrabber => grabOwnership == null
+        ? SharedNetworkGrabOwnership.NoGrabber
+        : grabOwnership.ActiveGrabber;
+    public uint LastAuthoritySequence => lastAuthoritySequence;
 
     private void Awake()
     {
         ballBody = GetComponent<Rigidbody>();
         grabInteractable = GetComponent<XRGrabInteractable>();
+        grabOwnership = GetComponent<SharedNetworkGrabOwnership>();
         ballBody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         ballBody.interpolation = RigidbodyInterpolation.Interpolate;
         ballBody.solverIterations = 10;
@@ -31,45 +38,22 @@ public sealed class TableTennisBall : NetworkBehaviour
 
         if (grabInteractable != null)
         {
-            grabInteractable.selectEntered.AddListener(HandleSelectEntered);
             grabInteractable.selectExited.AddListener(HandleSelectExited);
         }
     }
 
     private void Start()
     {
-        ApplyInteractionAuthority();
         RestoreOfflinePhysics();
-    }
-
-    public override void OnNetworkSpawn()
-    {
-        activeGrabber.OnValueChanged += HandleGrabberChanged;
-        if (IsServer && NetworkManager != null)
-        {
-            NetworkManager.OnClientDisconnectCallback += HandleClientDisconnected;
-        }
-        ApplyInteractionAuthority();
-    }
-
-    public override void OnNetworkDespawn()
-    {
-        activeGrabber.OnValueChanged -= HandleGrabberChanged;
-        if (NetworkManager != null)
-        {
-            NetworkManager.OnClientDisconnectCallback -= HandleClientDisconnected;
-        }
-        locallySelected = false;
-        ApplyInteractionAuthority();
     }
 
     public override void OnDestroy()
     {
         if (grabInteractable != null)
         {
-            grabInteractable.selectEntered.RemoveListener(HandleSelectEntered);
             grabInteractable.selectExited.RemoveListener(HandleSelectExited);
         }
+
         base.OnDestroy();
     }
 
@@ -80,7 +64,7 @@ public sealed class TableTennisBall : NetworkBehaviour
 
     private void FixedUpdate()
     {
-        if (IsSpawned && !IsPhysicsAuthority)
+        if (!IsPhysicsAuthority)
         {
             return;
         }
@@ -92,10 +76,12 @@ public sealed class TableTennisBall : NetworkBehaviour
             return;
         }
 
-        if (ballBody.linearVelocity.sqrMagnitude > maxSpeed * maxSpeed)
+        if (grabOwnership == null || !grabOwnership.IsLocallySelected)
         {
-            ballBody.linearVelocity = ballBody.linearVelocity.normalized * maxSpeed;
+            TryHandoffAcrossNet();
         }
+
+        ballBody.linearVelocity = Vector3.ClampMagnitude(ballBody.linearVelocity, maxSpeed);
     }
 
     public void ResetForServe(Vector3 position)
@@ -105,16 +91,13 @@ public sealed class TableTennisBall : NetworkBehaviour
             return;
         }
 
-        if (IsSpawned)
+        frozen = false;
+        if (IsSpawned && grabOwnership != null)
         {
-            ReturnAuthorityToServer(position, Quaternion.identity, Vector3.zero, Vector3.zero);
+            grabOwnership.ForceReleaseToServer();
         }
 
-        frozen = false;
-        ballBody.linearVelocity = Vector3.zero;
-        ballBody.angularVelocity = Vector3.zero;
-        ballBody.position = position;
-        ballBody.rotation = Quaternion.identity;
+        ApplyState(position, Quaternion.identity, Vector3.zero, Vector3.zero, ++lastAuthoritySequence);
     }
 
     public void DebugLaunch(Vector3 velocity)
@@ -143,153 +126,226 @@ public sealed class TableTennisBall : NetworkBehaviour
         }
     }
 
-    private void ApplyInteractionAuthority()
-    {
-        if (grabInteractable != null)
-        {
-            // Every peer may initiate a grab. The server transfers ownership
-            // to the latest grabber so NetworkTransform and physics still have
-            // exactly one writer while the ball is held.
-            grabInteractable.enabled = true;
-        }
-    }
-
-    private void HandleSelectEntered(SelectEnterEventArgs _)
-    {
-        locallySelected = true;
-        if (!IsSpawned)
-        {
-            return;
-        }
-
-        if (IsServer)
-        {
-            GiveAuthorityTo(NetworkManager.LocalClientId);
-        }
-        else
-        {
-            RequestGrabServerRpc();
-        }
-    }
-
     private void HandleSelectExited(SelectExitEventArgs _)
     {
-        locallySelected = false;
-        if (!IsSpawned || NetworkManager == null)
+        // Synchronize the Rigidbody before physics resumes so release starts at
+        // the controller pose and keeps the throw velocity XRI applies afterward.
+        ballBody.position = transform.position;
+        ballBody.rotation = transform.rotation;
+        Physics.SyncTransforms();
+    }
+
+    private void TryHandoffAcrossNet()
+    {
+        if (!IsSpawned ||
+            (grabOwnership != null &&
+             grabOwnership.ActiveGrabber != SharedNetworkGrabOwnership.NoGrabber))
         {
             return;
         }
 
-        Vector3 position = ballBody.position;
-        Quaternion rotation = ballBody.rotation;
-        Vector3 linearVelocity = ballBody.linearVelocity;
-        Vector3 angularVelocity = ballBody.angularVelocity;
+        if (tablePlacement == null)
+        {
+            tablePlacement = FindFirstObjectByType<TableTennisMRPlacement>();
+        }
 
+        Transform tableRoot = tablePlacement == null ? null : tablePlacement.TableRoot;
+        if (tableRoot == null)
+        {
+            return;
+        }
+
+        float localX = tableRoot.InverseTransformPoint(ballBody.position).x;
+        if (Mathf.Abs(localX) <= sideHandoffDeadZone)
+        {
+            return;
+        }
+
+        ulong desiredOwner = localX > 0f ? NetworkManager.ServerClientId : GetFirstRemoteClientId();
+        if (desiredOwner != NetworkObject.OwnerClientId)
+        {
+            RequestAuthorityHandoff(desiredOwner);
+        }
+    }
+
+    private ulong GetFirstRemoteClientId()
+    {
+        if (NetworkManager == null)
+        {
+            return 0;
+        }
+
+        foreach (ulong clientId in NetworkManager.ConnectedClientsIds)
+        {
+            if (clientId != NetworkManager.ServerClientId)
+            {
+                return clientId;
+            }
+        }
+
+        return NetworkManager.ServerClientId;
+    }
+
+    private bool IsConnectedClient(ulong clientId)
+    {
+        if (NetworkManager == null)
+        {
+            return false;
+        }
+
+        foreach (ulong connectedId in NetworkManager.ConnectedClientsIds)
+        {
+            if (connectedId == clientId)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void RequestAuthorityHandoff(ulong destinationOwner)
+    {
+        if (!IsSpawned || NetworkManager == null ||
+            destinationOwner == NetworkObject.OwnerClientId ||
+            !IsConnectedClient(destinationOwner))
+        {
+            return;
+        }
+
+        uint sequence = ++lastAuthoritySequence;
+        double serverTime = NetworkManager.ServerTime.Time;
         if (IsServer)
         {
-            ReleaseGrab(NetworkManager.LocalClientId, position, rotation, linearVelocity, angularVelocity);
+            PerformAuthorityHandoff(
+                NetworkManager.LocalClientId,
+                destinationOwner,
+                ballBody.position,
+                ballBody.rotation,
+                ballBody.linearVelocity,
+                ballBody.angularVelocity,
+                serverTime,
+                sequence);
         }
         else
         {
-            ReleaseGrabServerRpc(position, rotation, linearVelocity, angularVelocity);
-        }
-    }
-
-    private void HandleGrabberChanged(ulong _, ulong newGrabber)
-    {
-        if (!locallySelected || !IsSpawned || NetworkManager == null ||
-            newGrabber == NetworkManager.LocalClientId)
-        {
-            return;
-        }
-
-        // A grab from the other player takes over authority. Cancel the old
-        // local selection so two XR interactors cannot keep writing the pose.
-        grabInteractable.interactionManager?.CancelInteractableSelection(
-            (IXRSelectInteractable)grabInteractable);
-        locallySelected = false;
-    }
-
-    private void HandleClientDisconnected(ulong clientId)
-    {
-        if (IsServer && activeGrabber.Value == clientId)
-        {
-            ReturnAuthorityToServer(ballBody.position, ballBody.rotation, Vector3.zero, Vector3.zero);
+            RequestAuthorityHandoffServerRpc(
+                destinationOwner,
+                ballBody.position,
+                ballBody.rotation,
+                ballBody.linearVelocity,
+                ballBody.angularVelocity,
+                serverTime,
+                sequence);
         }
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void RequestGrabServerRpc(RpcParams rpcParams = default)
-    {
-        GiveAuthorityTo(rpcParams.Receive.SenderClientId);
-    }
-
-    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void ReleaseGrabServerRpc(
+    private void RequestAuthorityHandoffServerRpc(
+        ulong destinationOwner,
         Vector3 position,
         Quaternion rotation,
-        Vector3 linearVelocity,
+        Vector3 velocity,
         Vector3 angularVelocity,
+        double sampleServerTime,
+        uint sequence,
         RpcParams rpcParams = default)
     {
-        ReleaseGrab(
+        PerformAuthorityHandoff(
             rpcParams.Receive.SenderClientId,
+            destinationOwner,
             position,
             rotation,
-            linearVelocity,
-            angularVelocity);
+            velocity,
+            angularVelocity,
+            sampleServerTime,
+            sequence);
     }
 
-    private void GiveAuthorityTo(ulong clientId)
-    {
-        if (!IsServer || NetworkObject == null)
-        {
-            return;
-        }
-
-        activeGrabber.Value = clientId;
-        if (OwnerClientId != clientId)
-        {
-            NetworkObject.ChangeOwnership(clientId);
-        }
-    }
-
-    private void ReleaseGrab(
-        ulong clientId,
+    private void PerformAuthorityHandoff(
+        ulong sender,
+        ulong destinationOwner,
         Vector3 position,
         Quaternion rotation,
-        Vector3 linearVelocity,
-        Vector3 angularVelocity)
+        Vector3 velocity,
+        Vector3 angularVelocity,
+        double sampleServerTime,
+        uint sequence)
     {
-        if (!IsServer || activeGrabber.Value != clientId)
+        if (!IsServer || sender != NetworkObject.OwnerClientId ||
+            destinationOwner == sender || !IsConnectedClient(destinationOwner))
         {
             return;
         }
 
-        ReturnAuthorityToServer(position, rotation, linearVelocity, angularVelocity);
-    }
-
-    private void ReturnAuthorityToServer(
-        Vector3 position,
-        Quaternion rotation,
-        Vector3 linearVelocity,
-        Vector3 angularVelocity)
-    {
-        if (!IsServer || NetworkObject == null)
-        {
-            return;
-        }
-
-        activeGrabber.Value = NoGrabber;
-        if (OwnerClientId != NetworkManager.ServerClientId)
+        if (destinationOwner == NetworkManager.ServerClientId)
         {
             NetworkObject.RemoveOwnership();
+            ApplyExtrapolatedState(
+                position, rotation, velocity, angularVelocity, sampleServerTime, sequence);
+            return;
         }
 
+        NetworkObject.ChangeOwnership(destinationOwner);
+        ReceiveAuthorityStateRpc(
+            position,
+            rotation,
+            velocity,
+            angularVelocity,
+            sampleServerTime,
+            sequence,
+            RpcTarget.Single(destinationOwner, RpcTargetUse.Temp));
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void ReceiveAuthorityStateRpc(
+        Vector3 position,
+        Quaternion rotation,
+        Vector3 velocity,
+        Vector3 angularVelocity,
+        double sampleServerTime,
+        uint sequence,
+        RpcParams rpcParams = default)
+    {
+        ApplyExtrapolatedState(
+            position, rotation, velocity, angularVelocity, sampleServerTime, sequence);
+    }
+
+    private void ApplyExtrapolatedState(
+        Vector3 position,
+        Quaternion rotation,
+        Vector3 velocity,
+        Vector3 angularVelocity,
+        double sampleServerTime,
+        uint sequence)
+    {
+        float transitTime = NetworkManager == null
+            ? 0f
+            : Mathf.Clamp((float)(NetworkManager.ServerTime.Time - sampleServerTime), 0f, 0.15f);
+        Vector3 extrapolatedPosition =
+            position + velocity * transitTime + Physics.gravity * (0.5f * transitTime * transitTime);
+        Vector3 extrapolatedVelocity = velocity + Physics.gravity * transitTime;
+        ApplyState(
+            extrapolatedPosition,
+            rotation,
+            extrapolatedVelocity,
+            angularVelocity,
+            sequence);
+    }
+
+    private void ApplyState(
+        Vector3 position,
+        Quaternion rotation,
+        Vector3 velocity,
+        Vector3 angularVelocity,
+        uint sequence)
+    {
         ballBody.position = position;
         ballBody.rotation = rotation;
-        ballBody.linearVelocity = Vector3.ClampMagnitude(linearVelocity, maxSpeed);
-        ballBody.angularVelocity = angularVelocity;
+        transform.SetPositionAndRotation(position, rotation);
+        ballBody.linearVelocity = Vector3.ClampMagnitude(velocity, maxSpeed);
+        ballBody.angularVelocity = Vector3.ClampMagnitude(angularVelocity, ballBody.maxAngularVelocity);
+        lastAuthoritySequence = sequence;
     }
 
     private void RestoreOfflinePhysics()
@@ -299,8 +355,6 @@ public sealed class TableTennisBall : NetworkBehaviour
             return;
         }
 
-        // NetworkRigidbody parks unspawned bodies in kinematic mode. Offline
-        // debug play still needs the normal local physics simulation.
         if (ballBody != null && ballBody.isKinematic)
         {
             ballBody.isKinematic = false;
@@ -311,5 +365,4 @@ public sealed class TableTennisBall : NetworkBehaviour
             grabInteractable.enabled = true;
         }
     }
-
 }

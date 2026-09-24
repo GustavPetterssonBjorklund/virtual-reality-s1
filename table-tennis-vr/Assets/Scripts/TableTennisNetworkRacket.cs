@@ -1,12 +1,17 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
-
+[RequireComponent(typeof(SharedNetworkGrabOwnership))]
 public sealed class TableTennisNetworkRacket : NetworkBehaviour
 {
     private XRGrabInteractable grabInteractable;
+    private SharedNetworkGrabOwnership grabOwnership;
     private Rigidbody body;
+    private Collider[] racketColliders;
+    private TableTennisMRPlacement tablePlacement;
+    private bool ignoresTableCollision;
     private Transform spawnParent;
     private Vector3 spawnLocalPosition;
     private Quaternion spawnLocalRotation;
@@ -15,16 +20,24 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
     private Quaternion spawnWorldRotation;
     private bool hasSpawnPose;
 
-    public bool IsPhysicsAuthority => !IsSpawned || IsOwner;
+    public bool IsPhysicsAuthority => grabOwnership == null || grabOwnership.HasPhysicsAuthority;
     public bool IsKinematic => body != null && body.isKinematic;
 
     private void Awake()
     {
         grabInteractable = GetComponent<XRGrabInteractable>();
+        grabOwnership = GetComponent<SharedNetworkGrabOwnership>();
         body = GetComponent<Rigidbody>();
+        racketColliders = GetComponentsInChildren<Collider>(true);
         body.useGravity = true;
         body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         body.interpolation = RigidbodyInterpolation.Interpolate;
+
+        if (grabInteractable != null)
+        {
+            grabInteractable.selectEntered.AddListener(HandleSelectEntered);
+            grabInteractable.selectExited.AddListener(HandleSelectExited);
+        }
     }
 
     private void Start()
@@ -34,23 +47,32 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
             CaptureSpawnPose();
         }
 
-        ApplyInteractionAuthority();
         RestoreOfflinePhysics();
     }
 
     public override void OnNetworkSpawn()
     {
-        if (IsOwner)
+        if (IsPhysicsAuthority)
         {
             CaptureSpawnPose();
         }
-
-        ApplyInteractionAuthority();
     }
 
     public override void OnNetworkDespawn()
     {
-        ApplyInteractionAuthority();
+        SetTableCollisionIgnored(false);
+    }
+
+    public override void OnDestroy()
+    {
+        SetTableCollisionIgnored(false);
+        if (grabInteractable != null)
+        {
+            grabInteractable.selectEntered.RemoveListener(HandleSelectEntered);
+            grabInteractable.selectExited.RemoveListener(HandleSelectExited);
+        }
+
+        base.OnDestroy();
     }
 
     private void Update()
@@ -58,12 +80,51 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
         RestoreOfflinePhysics();
     }
 
-    private void ApplyInteractionAuthority()
+    private void HandleSelectEntered(SelectEnterEventArgs _)
     {
-        if (grabInteractable != null)
+        SetTableCollisionIgnored(true);
+    }
+
+    private void HandleSelectExited(SelectExitEventArgs _)
+    {
+        SetTableCollisionIgnored(false);
+    }
+
+    private void SetTableCollisionIgnored(bool ignored)
+    {
+        if (ignoresTableCollision == ignored)
         {
-            grabInteractable.enabled = !IsSpawned || IsOwner;
+            return;
         }
+
+        if (tablePlacement == null)
+        {
+            tablePlacement = FindFirstObjectByType<TableTennisMRPlacement>();
+        }
+
+        Collider[] tableColliders = tablePlacement == null ? null : tablePlacement.TableColliders;
+        if (tableColliders == null)
+        {
+            return;
+        }
+
+        foreach (Collider racketCollider in racketColliders)
+        {
+            if (racketCollider == null)
+            {
+                continue;
+            }
+
+            foreach (Collider tableCollider in tableColliders)
+            {
+                if (tableCollider != null && tableCollider != racketCollider)
+                {
+                    Physics.IgnoreCollision(racketCollider, tableCollider, ignored);
+                }
+            }
+        }
+
+        ignoresTableCollision = ignored;
     }
 
     public void RequestResetToSpawn()
@@ -76,7 +137,7 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
 
         if (IsServer)
         {
-            ResetToSpawnRpc();
+            ResetToSpawnOnServer();
             return;
         }
 
@@ -86,16 +147,18 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     private void RequestResetToSpawnServerRpc()
     {
-        ResetToSpawnRpc();
+        ResetToSpawnOnServer();
     }
 
-    [Rpc(SendTo.Everyone)]
-    private void ResetToSpawnRpc()
+    private void ResetToSpawnOnServer()
     {
-        if (IsOwner)
+        if (!IsServer)
         {
-            ResetToSpawnPose();
+            return;
         }
+
+        grabOwnership?.ForceReleaseToServer();
+        ResetToSpawnPose();
     }
 
     private void CaptureSpawnPose()
@@ -140,7 +203,10 @@ public sealed class TableTennisNetworkRacket : NetworkBehaviour
             body.angularVelocity = Vector3.zero;
         }
 
-        ApplyInteractionAuthority();
+        if (grabInteractable != null)
+        {
+            grabInteractable.enabled = true;
+        }
     }
 
     private void RestoreOfflinePhysics()
