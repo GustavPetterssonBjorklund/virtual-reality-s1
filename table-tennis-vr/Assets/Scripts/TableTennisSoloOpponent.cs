@@ -30,9 +30,18 @@ public sealed class TableTennisSoloOpponent : MonoBehaviour
             GameObject opponent = Instantiate(playerRacket.gameObject, transform);
             opponent.name = "Solo Opponent Racket";
             racket = opponent.transform;
-            homePosition = new Vector3(-1f, 1.15f, -0.25f);
+            homePosition = new Vector3(1f, 1.15f, -0.25f);
             racket.localPosition = homePosition;
             racket.localRotation = playerRacket.localRotation;
+
+            foreach (BallEventTrigger trigger in opponent.GetComponentsInChildren<BallEventTrigger>(true))
+            {
+                if (trigger.eventType == TableTennisRules.BallEvent.P1Racket)
+                {
+                    trigger.gameObject.name = "P2 Racket Trigger";
+                    trigger.eventType = TableTennisRules.BallEvent.P2Racket;
+                }
+            }
 
             XRGrabInteractable grab = opponent.GetComponent<XRGrabInteractable>();
             if (grab != null)
@@ -72,7 +81,7 @@ public sealed class TableTennisSoloOpponent : MonoBehaviour
         Vector3 target = homePosition;
         Vector3 localBall = transform.InverseTransformPoint(ball.transform.position);
         Vector3 localVelocity = transform.InverseTransformDirection(ball.LinearVelocity);
-        if (localVelocity.x < 0f || localBall.x < 0f)
+        if (localVelocity.x > 0f || localBall.x > 0f)
         {
             target.z = Mathf.Clamp(localBall.z, -maximumReach, maximumReach);
             target.y = Mathf.Clamp(localBall.y, 0.92f, 1.42f);
