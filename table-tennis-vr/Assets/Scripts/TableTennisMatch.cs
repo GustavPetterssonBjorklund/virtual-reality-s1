@@ -90,6 +90,60 @@ public sealed class TableTennisMatch : NetworkBehaviour
         }
     }
 
+    public void RequestAdjustScore(int player, int delta)
+    {
+        if (IsOffline || (IsSpawned && IsServer))
+            AdjustScore(player, delta);
+        else if (IsSpawned)
+            RequestAdjustScoreServerRpc(player, delta);
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    private void RequestAdjustScoreServerRpc(int player, int delta)
+    {
+        AdjustScore(player, delta);
+    }
+
+    private void AdjustScore(int player, int delta)
+    {
+        if ((player != 1 && player != 2) || (delta != 1 && delta != -1))
+            return;
+
+        if (delta == 1)
+        {
+            AwardPoint(player);
+            return;
+        }
+
+        bool wasGameOver = IsGameOver;
+        if (IsOffline)
+        {
+            if (player == 1)
+                offlinePlayerOneScore = Mathf.Max(0, offlinePlayerOneScore - 1);
+            else
+                offlinePlayerTwoScore = Mathf.Max(0, offlinePlayerTwoScore - 1);
+
+            offlineWinner = HasWon(PlayerOneScore, PlayerTwoScore) ? 1
+                : HasWon(PlayerTwoScore, PlayerOneScore) ? 2 : 0;
+            offlineIsGameOver = offlineWinner != 0;
+            if (offlineIsGameOver || wasGameOver)
+                offlineMatchActive = !offlineIsGameOver;
+        }
+        else if (IsServer)
+        {
+            if (player == 1)
+                playerOneScore.Value = Mathf.Max(0, PlayerOneScore - 1);
+            else
+                playerTwoScore.Value = Mathf.Max(0, PlayerTwoScore - 1);
+
+            winner.Value = HasWon(PlayerOneScore, PlayerTwoScore) ? 1
+                : HasWon(PlayerTwoScore, PlayerOneScore) ? 2 : 0;
+            isGameOver.Value = winner.Value != 0;
+            if (IsGameOver || wasGameOver)
+                matchActive.Value = !IsGameOver;
+        }
+    }
+
     public void RequestResetMatch()
     {
         if (IsOffline)

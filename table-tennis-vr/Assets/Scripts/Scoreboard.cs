@@ -6,49 +6,39 @@ public class Scoreboard : MonoBehaviour
     public TMP_Text player1ScoreText;
     public TMP_Text player2ScoreText;
 
-    private int player1Score = 0;
-    private int player2Score = 0;
+    private TableTennisMatch match;
 
-    void Start()
+    void Awake()
     {
-        UpdateScoreboard();
+        match = FindFirstObjectByType<TableTennisMatch>();
     }
 
     public void Plus1()
     {
-        player1Score++;
-        UpdateScoreboard();
+        match?.RequestAdjustScore(1, 1);
     }
 
     public void Minus1()
     {
-        if (player1Score > 0)
-        {
-            player1Score--;
-        }
-
-        UpdateScoreboard();
+        match?.RequestAdjustScore(1, -1);
     }
 
     public void Plus2()
     {
-        player2Score++;
-        UpdateScoreboard();
+        match?.RequestAdjustScore(2, 1);
     }
 
     public void Minus2()
     {
-        if (player2Score > 0)
-        {
-            player2Score--;
-        }
-
-        UpdateScoreboard();
+        match?.RequestAdjustScore(2, -1);
     }
 
-    private void UpdateScoreboard()
+    private void Update()
     {
-        player1ScoreText.text = player1Score.ToString();
-        player2ScoreText.text = player2Score.ToString();
+        if (match == null)
+            return;
+
+        player1ScoreText.text = match.PlayerOneScore.ToString();
+        player2ScoreText.text = match.PlayerTwoScore.ToString();
     }
 }
